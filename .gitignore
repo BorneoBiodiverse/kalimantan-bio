@@ -1,0 +1,14 @@
+# Rust
+/target
+
+# Environment
+.env
+.env.*
+!.env.example
+DATABASE_URL
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
