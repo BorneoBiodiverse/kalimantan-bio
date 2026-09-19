@@ -1,0 +1,15 @@
+[
+  {
+    "id": 1,
+    "species_id": 1,
+    "latitude": -2.0,
+    "longitude": 114.0,
+    "date": "2025-03-15",
+    "count": 4,
+    "is_verified": true,
+    "source_method": "Line transect",
+    "kabupaten_id": 6201,
+    "kabupaten_name": "Kotawaringin Barat",
+    "province_name": "Kalimantan Tengah"
+  }
+]

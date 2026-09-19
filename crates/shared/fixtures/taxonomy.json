@@ -1,0 +1,16 @@
+[
+  {
+    "kingdom": "Animalia",
+    "kingdom_id": 1,
+    "phylum_division": "Chordata",
+    "phylum_division_id": 2,
+    "class": "Mammalia",
+    "class_id": 3,
+    "order": "Primates",
+    "order_id": 4,
+    "family": "Hominidae",
+    "family_id": 5,
+    "genus": "Pongo",
+    "genus_id": 6
+  }
+]
