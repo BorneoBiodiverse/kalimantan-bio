@@ -1,0 +1,11 @@
+[package]
+name = "species-search"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+kalimantanbio-shared = { path = "../shared" }
+
+[dev-dependencies]
+tokio = { workspace = true }

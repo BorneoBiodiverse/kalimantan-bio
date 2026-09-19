@@ -1,0 +1,12 @@
+[package]
+name = "taxonomy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+kalimantanbio-shared = { path = "../shared" }
+serde = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
