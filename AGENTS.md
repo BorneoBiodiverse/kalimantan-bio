@@ -82,6 +82,12 @@ pub fn search(raw_query: &str, all_species: &[Species]) -> Vec<(&Species, f64)> 
 }
 ```
 
+## Diagrams in documentation
+
+- All architecture, request-response flows, sequence diagrams, and pipeline compositions in planning and documentation files (`planning/*.md`) must be formatted as **Mermaid.js** diagrams (`mermaid` code blocks).
+- Do not use plain text ASCII art diagrams.
+- Use supported Mermaid types: `flowchart TD`, `flowchart LR`, or `sequenceDiagram`. Quote node labels containing special characters and avoid raw HTML tags in labels.
+
 ## Shared library (`kalimantanbio-shared`)
 
 Public types (MASTERPLAN §5.2):
@@ -125,6 +131,18 @@ Module crates depend only on `kalimantanbio-shared` and workspace crates they ge
 - A unified Axum `Router` exposing the planned routes (MASTERPLAN §8.2).
 - Route handlers **compose module `pub fn` declarations** to demonstrate the inter-module contract (the 40% rubrik item). Bodies remain stubs — no working logic.
 - No module→module crate dependencies; the server composes via `pub fn` only.
+
+## Client integration (Django)
+
+- **Django (Port 8000)** is the confirmed frontend host and API gateway consuming the Axum API server (Port 3000) over HTTP/JSON (MASTERPLAN §9).
+- **Decoupled purity:** Axum route handlers return pure domain data and graph networks without 2D/3D GUI layout coordinates or HTML/CSS formatting. Layout computation and rendering are delegated to Django templates and client-side graph visualizers (e.g., Cytoscape.js/D3.js).
+- Axum configures CORS to permit the Django origin (`http://localhost:8000`).
+
+## Git operations safety
+
+- **Never stage, unstage, commit, or push:** Do not run `git add`, `git commit`, `git push`, `git restore --staged`, `git reset`, or any other git staging/commit commands autonomously.
+- **User ownership:** Staging, committing, and pushing are strictly reserved for the user.
+- All file modifications must remain unstaged in the working directory for user review.
 
 ## Verification
 
