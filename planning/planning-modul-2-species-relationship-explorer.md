@@ -22,13 +22,13 @@ Modul ini bertanggung jawab untuk:
 * **Related Species Discovery:** menemukan dan mengurutkan spesies yang memiliki kesamaan dengan spesies pilihan pengguna.
 * **Relationship Scoring:** menghitung kekuatan hubungan secara deterministik berdasarkan aturan yang disepakati.
 * **Relationship Explanation:** menjelaskan atribut yang sama, kontribusinya terhadap skor, dan keterbatasan data.
-* **Interactive Species Network (dukungan backend):** menyediakan node, edge, skor, dan penjelasan melalui JSON agar nantinya dapat digunakan oleh frontend. Pergantian spesies pusat dan filter dilakukan melalui parameter permintaan API.
+* **Interactive Species Network (dukungan backend):** menyediakan node, edge, skor, dan penjelasan melalui JSON agar nantinya dapat digunakan oleh frontend Django. Pergantian spesies pusat dan filter dilakukan melalui parameter permintaan API.
 
 ### Batasan Modul
 
 Modul ini **tidak bertanggung jawab** terhadap:
 
-* Pemilihan teknologi dan implementasi GUI/frontend rendering (tanggung jawab Django frontend).
+* Pemilihan framework frontend dan rendering visual graf (tanggung jawab Django frontend dan visualizer client-side seperti Cytoscape.js/D3.js di template Django).
 * Pencarian bahasa alami dan rekomendasi kueri pada Modul 1.
 * Pohon taksonomi lengkap serta analisis cakupan taksonomi pada Modul 3.
 * Tabel perbandingan banyak spesies dan analisis ciri pembeda lengkap pada Modul 4.
@@ -412,9 +412,9 @@ Kontrak jaringan versi awal:
 * Node pusat selalu hadir, termasuk ketika tidak ada rekomendasi.
 * Untuk `k` rekomendasi, hasil berisi `k + 1` node dan `k` edge; maksimum 51 node dan 50 edge.
 * Tidak ada edge antartetangga dalam satu respons. Eksplorasi tetangga dilakukan dengan permintaan API baru yang menggunakan ID tetangga tersebut sebagai pusat.
-* Respons berisi data domain tanpa koordinat layout, komponen tampilan, atau format khusus framework GUI. Layout dan rendering menjadi tanggung jawab GUI setelah teknologinya dipilih.
+* Respons berisi data domain murni tanpa koordinat layout 2D/3D atau komponen tampilan HTML/CSS. Layout graf (misalnya force-directed layout) dan rendering visual menjadi tanggung jawab client-side di dalam Django template (misalnya menggunakan Cytoscape.js, D3.js, atau Vis.js).
 
-Dukungan minimum backend: perubahan pusat melalui `species_id`, filter melalui `min_score` dan `required_basis`, pembatasan hasil melalui `limit`, serta detail skor dan penjelasan di setiap edge. Klien tidak perlu menghitung ulang scoring. Rancangan interaksi visual dan aksesibilitas ditentukan pada tahap GUI, setelah stack dipilih, dan tidak menjadi syarat selesai tahap backend.
+Dukungan minimum backend: perubahan pusat melalui `species_id`, filter melalui `min_score` dan `required_basis`, pembatasan hasil melalui `limit`, serta detail skor dan penjelasan di setiap edge. Klien Django tidak perlu menghitung ulang scoring. Interaksi penjelajahan graf dilakukan dengan memanggil endpoint Axum dengan ID node tetangga yang dipilih melalui Django view/API proxy.
 
 **Person in Charge:** **Anggota 3 — Struktur jaringan dan kontrak output graf (nama menyusul; juga menangani Tahap 5).**
 
@@ -422,14 +422,33 @@ Dukungan minimum backend: perubahan pusat melalui `species_id`, filter melalui `
 
 ## 8. Tahap 5 — Integrasi API Axum dan Pengujian Backend
 
-Menghubungkan fungsi inti Rust dengan API Axum serta menyiapkan bukti bahwa backend berjalan sesuai kontrak tanpa ketergantungan GUI. Bentuk endpoint berikut adalah usulan integrasi, belum merupakan endpoint yang telah tersedia. Data spesies dibaca dari production database melalui shared library (`fetch_all_species`, `create_pool`).
+Menghubungkan fungsi inti Rust dengan API Axum serta menyiapkan bukti bahwa backend berjalan sesuai kontrak untuk dikonsumsi oleh Django client (port 8000). Bentuk endpoint berikut adalah usulan integrasi, belum merupakan endpoint yang telah tersedia. Data spesies dibaca dari production database melalui shared library (`fetch_all_species`, `create_pool`).
+
+### Alur Integrasi Django ⇄ Axum
+
+```mermaid
+flowchart TD
+    User["User Browser"]
+    Django["Django Frontend & API Layer (:8000)"]
+    Axum["Axum API Endpoint (:3000)"]
+    Pipeline["Core Rust Pipeline (explore_relationships)"]
+    Template["Django Template Context (HTML + Cytoscape.js / D3.js)"]
+
+    User -->|"HTTP GET /species/:id/relationships"| Django
+    Django -->|"Python HTTP Client (httpx / requests)"| Axum
+    Axum -->|"Input snapshot, Query, Weights"| Pipeline
+    Pipeline -->|"Result<ExplorerResult, ExplorerError>"| Axum
+    Axum -->|"200 OK (ExplorerResult JSON)"| Django
+    Django -->|"Context Injection (nodes & edges)"| Template
+    Template -->|"Render Interactive Graph"| User
+```
 
 | Fungsi / Komponen | Signature / Bentuk | Deskripsi |
 | --- | --- | --- |
 | Adapter repository | Snapshot `Vec<Species>` dari sumber data repository | **Uses SHARED `fetch_all_species` / `create_pool`**: Memetakan skema penyimpanan ke domain; I/O dan kegagalan sumber data ditangani di luar fungsi murni. |
 | API Axum | `GET /api/v1/species/{species_id}/relationships?min_score=0.2&limit=10&required_basis=habitat` | Mem-parse input, menerapkan default, memanggil pipeline, dan mengembalikan JSON `ExplorerResult`. Parameter basis bersifat opsional. |
 | Adapter JSON dan error | DTO request/response serta pemetaan status HTTP | Field mengikuti kontrak domain; enum basis memakai `taxonomy`, `habitat`, atau `characteristic`. |
-| Dokumentasi dan demo API | Kontrak JSON serta contoh request/response menggunakan klien HTTP | Menjelaskan cara memilih pusat, mengubah filter, membaca graf, dan menangani error tanpa GUI. |
+| Dokumentasi dan demo API | Kontrak JSON serta contoh request/response menggunakan klien HTTP / Django client | Menjelaskan cara memilih pusat, mengubah filter, membaca graf, dan menangani error tanpa ketergantungan langsung pada GUI saat pengujian backend. |
 | Integration dan end-to-end tests backend | Fixture tetap serta alur HTTP request → adapter → pipeline Rust → HTTP response | Memverifikasi status HTTP, JSON, dan hasil domain, termasuk permintaan ulang dengan pusat baru. |
 
 Kontrak respons:
@@ -442,11 +461,11 @@ Kontrak respons:
 | Data sumber tidak valid atau konfigurasi bobot salah | `500` | Pesan generik kepada pengguna; rincian diagnosis dicatat server. |
 | Sumber data tidak tersedia | `503` | Informasi kegagalan sementara; ditangani adapter. |
 
-Konfigurasi alamat layanan, timeout, dan kredensial mengikuti lingkungan deployment dan tidak ditanam dalam fungsi domain. API mengembalikan status HTTP, hasil kosong, dan error terstruktur secara konsisten. Pengaturan akses lintas origin, bila diperlukan, ditetapkan saat klien GUI dan pola deployment sudah diketahui.
+Konfigurasi alamat layanan, timeout, dan kredensial mengikuti lingkungan deployment dan tidak ditanam dalam fungsi domain. API mengembalikan status HTTP, hasil kosong, dan error terstruktur secara konsisten. Pengaturan akses lintas origin (CORS) pada Axum dikonfigurasi untuk mengizinkan Django client origin (`http://localhost:8000` pada pengembangan, atau nilai dari variabel `CORS_ORIGIN`).
 
 **Person in Charge:** **Anggota 3 — API Axum, integrasi backend, dan pengujian lintas komponen (nama menyusul; juga menangani Tahap 4).**
 
-> **Catatan:** Setiap PIC tetap bertanggung jawab terhadap unit test fungsi miliknya. Anggota 3 menangani struktur graf, konsistensi output, koneksi data, layanan HTTP, serta pengujian alur backend lengkap. Anggota 1 dan 2 tetap menyiapkan unit test serta mendukung penyelesaian masalah integrasi pada fungsi masing-masing. Kesiapan layanan backend perlu dibuktikan melalui konfigurasi deployment, smoke test pada lingkungan target yang disepakati, dan catatan hasil. Kesiapan GUI serta integrasi halaman repository dievaluasi pada tahap lanjutan; dokumen planning ini tidak menyatakan sistem sudah dideploy.
+> **Catatan:** Setiap PIC tetap bertanggung jawab terhadap unit test fungsi miliknya. Anggota 3 menangani struktur graf, konsistensi output, koneksi data, layanan HTTP, serta pengujian alur backend lengkap. Anggota 1 dan 2 tetap menyiapkan unit test serta mendukung penyelesaian masalah integrasi pada fungsi masing-masing. Kesiapan layanan backend perlu dibuktikan melalui konfigurasi deployment, smoke test pada lingkungan target yang disepakati, dan catatan hasil. Kesiapan integrasi Django frontend serta integrasi halaman repository dievaluasi pada tahap lanjutan; dokumen planning ini tidak menyatakan sistem sudah dideploy.
 
 ---
 
@@ -474,6 +493,18 @@ fn explore_relationships(
 ```
 
 Pipeline konseptual:
+
+```mermaid
+flowchart TD
+    Input["Input: &[Species], &RelationshipQuery, &ScoreWeights"] --> Val["validate_query & validate_weights"]
+    Val --> Prep["prepare_species (normalisasi data)"]
+    Prep --> Find["find_species (temukan center)"]
+    Find --> Cand["candidate_species (filter selain center)"]
+    Cand --> Score["score_candidates (bukti, skor, penjelasan)"]
+    Score --> Rank["rank_related (filter ambang & basis, urutkan deterministik)"]
+    Rank --> Net["assemble_result (build_network: nodes & edges)"]
+    Net --> Output["Output: ExplorerResult"]
+```
 
 1. Terima snapshot data, kueri, dan bobot.
 2. Validasi parameter dan normalisasi data.
@@ -574,7 +605,7 @@ Sebelum implementasi, seluruh anggota perlu menyepakati:
 | Reproduksi | Catat versi dataset dan versi scoring bersama hasil demo/pengujian. |
 | Pengujian | Fixture sintetis untuk aritmetika dan sampel terkurasi untuk validasi pemetaan data nyata. |
 | Produksi backend | Sepakati volume dataset, target waktu respons, lingkungan uji, dan konfigurasi deployment layanan Axum sebelum uji beban. |
-| GUI lanjutan | Stack belum ditentukan; integrasi menggunakan kontrak HTTP/JSON yang sama dan tidak menghambat penyelesaian backend. |
+| Client Django | Klien terkonfirmasi menggunakan Django (port 8000) yang mengonsumsi Axum REST API (port 3000) melalui HTTP/JSON; tidak menghambat penyelesaian backend Rust yang independen. |
 
 Bobot merupakan heuristik awal yang harus ditinjau dengan dosen atau kurator domain, bukan standar biologis. Jika aturan berubah, perbarui versi scoring, dokumentasi, dan expected output fixture secara bersamaan.
 
@@ -586,7 +617,7 @@ Modul ini dikembangkan sebagai komponen independen dalam KalimantanBio.
 
 Prinsip yang digunakan:
 
-* Inti Rust dapat dijalankan dan diuji menggunakan fixture tanpa server Axum, GUI, atau modul lain. Layanan Axum diuji terpisah pada lapisan integrasi HTTP.
+* Inti Rust dapat dijalankan dan diuji menggunakan fixture tanpa server Axum, Django client, atau modul lain. Layanan Axum diuji terpisah pada lapisan integrasi HTTP.
 * Adapter repository menyediakan data spesies melalui **shared library** (`fetch_all_species`, `create_pool`).
 * Modul hanya bergantung pada **shared library** (`kalimantanbio-shared`) untuk tipe data, scoring, dan validasi umum.
 * Tidak ada ketergantungan pada implementasi internal Modul 1, 3, 4, atau 5.
@@ -599,7 +630,7 @@ Prinsip yang digunakan:
 | Shared library (`kalimantanbio-shared`) | Satu-satunya dependency: tipe `Species`/`Taxonomy`, `calculate_taxonomy_similarity`, `jaccard_similarity`, `combine_weighted_scores`, `validate_weights_sum_to_one`, `fetch_all_species`. |
 | Repository data spesies | Menyediakan snapshot data melalui adapter yang terpisah dari fungsi inti. |
 | Axum | Mengekspos fungsi modul melalui API. |
-| GUI mendatang (teknologi belum ditentukan) | Integrasi lanjutan sebagai konsumen API HTTP/JSON; tidak menjadi dependency backend. |
+| Django Frontend & API Gateway (Port 8000) | Konsumen utama API REST Axum (port 3000); meneruskan query pengguna dan merender hasil graf ke antarmuka pengguna. |
 | Modul 1 | Opsional: mengirim ID spesies yang dipilih dari hasil pencarian. |
 | Modul 3 | Opsional: membuka informasi taksonomi menggunakan ID/kontrak publik. |
 | Modul 4 | Opsional: meneruskan ID spesies untuk perbandingan lebih lanjut. |
@@ -740,7 +771,7 @@ Pengujian integrasi tambahan: kirim permintaan API dengan pusat `sp-a`, lalu per
 11. Lakukan pengujian end-to-end backend dari request HTTP hingga response JSON, pemeriksaan keterbatasan data, serta pengukuran performa dengan volume dan target yang disepakati.
 12. Dokumentasikan hasil, versi dataset/scoring, cara menjalankan, contoh API, dan demonstrasi penerapan functional programming.
 13. Review kriteria selesai backend bersama tim dan dosen, lalu verifikasi layanan Axum pada lingkungan target sesuai proses proyek.
-14. Pada tahap lanjutan, tentukan teknologi GUI dan susun planning integrasi ke `kalimantanbio.com/repository/` berdasarkan API yang sudah tersedia; keputusan ini tidak menjadi prasyarat penyelesaian backend.
+14. Pada tahap lanjutan, implementasikan integrasi dengan Django frontend (views, template rendering dengan visualizer graf seperti Cytoscape.js/D3.js, dan penanganan parameter URL) untuk menghubungkan layanan Axum ke antarmuka pengguna KalimantanBio; integrasi ini tidak menjadi prasyarat penyelesaian backend Rust.
 
 ---
 
@@ -800,24 +831,26 @@ pub fn explore_relationships(
 
 ### 17.4 Komunikasi Antar Modul (Provider → Receiver)
 
-```text
-Modul 2 (Provider)
-      │
-      │ pub fn explore_relationships(...)
-      ▼
-Axum handler /api/v1/species/:id/relationships  (Receiver / Aplikasi)
-      │  hasil: ExplorerResult (skor, bukti, network)
-      ▼
-Django API → Frontend
+```mermaid
+flowchart TD
+    M2["Modul 2 (Provider: species-relationships)"]
+    Axum["Axum Handler: /api/v1/species/:id/relationships"]
+    DjangoAPI["Django API Layer (requests / httpx)"]
+    DjangoUI["Django Frontend Template (HTML + Cytoscape.js / D3.js)"]
+
+    M2 -->|"pub fn explore_relationships(...)"| Axum
+    Axum -->|"ExplorerResult (JSON)"| DjangoAPI
+    DjangoAPI -->|"Context Data (nodes & edges)"| DjangoUI
 ```
 
 Hubungan opsional (interface publik, bukan dependency crate):
 
-```text
-Modul 1 ──spesies pusat──▶ Modul 2 (RECEIVER dari hasil pencarian, opsional)
-Modul 2 ──ExplorerResult──▶ Modul 4 (penerusan ID untuk perbandingan, opsional)
-Modul 2 ──ExplorerResult──▶ Modul 5 (membuka referensi spesies, opsional)
-Modul 3 ──taksonomi──────▶ Modul 2 (membuka info taksonomi, opsional)
+```mermaid
+flowchart LR
+    M1["Modul 1: Search"] -->|"spesies pusat (opsional)"| M2["Modul 2: Relationships"]
+    M3["Modul 3: Taxonomy"] -->|"info taksonomi / DiversityStats (opsional)"| M2
+    M2 -->|"ExplorerResult / species_ids (opsional)"| M4["Modul 4: Comparison"]
+    M2 -->|"ExplorerResult / species_ids (opsional)"| M5["Modul 5: Knowledge & Citations"]
 ```
 
 | Provider | `pub fn` | Receiver | Purpose | Data yang Dikirim | Priority |

@@ -82,6 +82,12 @@ pub fn search(raw_query: &str, all_species: &[Species]) -> Vec<(&Species, f64)> 
 }
 ```
 
+## Diagrams in documentation
+
+- All architecture, request-response flows, sequence diagrams, and pipeline compositions in planning and documentation files (`planning/*.md`) must be formatted as **Mermaid.js** diagrams (`mermaid` code blocks).
+- Do not use plain text ASCII art diagrams.
+- Use supported Mermaid types: `flowchart TD`, `flowchart LR`, or `sequenceDiagram`. Quote node labels containing special characters and avoid raw HTML tags in labels.
+
 ## Shared library (`kalimantanbio-shared`)
 
 Public types (MASTERPLAN §5.2):
@@ -125,6 +131,27 @@ Module crates depend only on `kalimantanbio-shared` and workspace crates they ge
 - A unified Axum `Router` exposing the planned routes (MASTERPLAN §8.2).
 - Route handlers **compose module `pub fn` declarations** to demonstrate the inter-module contract (the 40% rubrik item). Bodies remain stubs — no working logic.
 - No module→module crate dependencies; the server composes via `pub fn` only.
+
+## Client integration (Django)
+
+- **Django (Port 8000)** is the confirmed frontend host and API gateway consuming the Axum API server (Port 3000) over HTTP/JSON (MASTERPLAN §9).
+- **Decoupled purity:** Axum route handlers return pure domain data and graph networks without 2D/3D GUI layout coordinates or HTML/CSS formatting. Layout computation and rendering are delegated to Django templates and client-side graph visualizers (e.g., Cytoscape.js/D3.js).
+- Axum configures CORS to permit the Django origin (`http://localhost:8000`).
+
+## Git operations & Pull Request workflow
+
+- **No autonomous git mutations:** Do not run `git add`, `git commit`, `git push`, `git restore --staged`, `git reset`, or other git state commands without explicit user instruction. All file modifications remain unstaged for user review by default.
+- **Pre-execution confirmation:** When instructed to perform git/GitHub operations, always confirm the exact plan, commands, and naming with the user before executing.
+- **Branch naming convention:** Always format feature branches as:
+  `module/<module-crate-name>/<issue-number>-<short-description>`
+  (e.g., `module/species-relationships/1-django-client-mermaid`). Never use numeric module prefixes like `module-2/...`.
+- **Standard Issue-to-Draft-PR Protocol:**
+  1. **Create Issue first:** Use `gh issue create` to get the assigned issue number (`#<issue-number>`).
+  2. **Branch:** Check out the branch adhering to `module/<module-crate-name>/<issue-number>-<short-description>`.
+  3. **Atomic commits:** Organize changes into focused atomic commits with Conventional Commit prefixes (e.g., `docs(species-relationships): ...`).
+  4. **Push:** Push the feature branch to `origin` with upstream tracking (`git push -u origin <branch-name>`).
+  5. **Local `main` cleanliness:** Never leave unpushed commits on local `main`. Keep local `main` synchronized with `origin/main`.
+  6. **Draft PR:** Create a Draft Pull Request targeting the default branch `main` via `gh pr create --draft`, linking back to the issue (`Resolves #<issue-number>`).
 
 ## Verification
 
