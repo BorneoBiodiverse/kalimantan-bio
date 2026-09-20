@@ -138,11 +138,20 @@ Module crates depend only on `kalimantanbio-shared` and workspace crates they ge
 - **Decoupled purity:** Axum route handlers return pure domain data and graph networks without 2D/3D GUI layout coordinates or HTML/CSS formatting. Layout computation and rendering are delegated to Django templates and client-side graph visualizers (e.g., Cytoscape.js/D3.js).
 - Axum configures CORS to permit the Django origin (`http://localhost:8000`).
 
-## Git operations safety
+## Git operations & Pull Request workflow
 
-- **Never stage, unstage, commit, or push:** Do not run `git add`, `git commit`, `git push`, `git restore --staged`, `git reset`, or any other git staging/commit commands autonomously.
-- **User ownership:** Staging, committing, and pushing are strictly reserved for the user.
-- All file modifications must remain unstaged in the working directory for user review.
+- **No autonomous git mutations:** Do not run `git add`, `git commit`, `git push`, `git restore --staged`, `git reset`, or other git state commands without explicit user instruction. All file modifications remain unstaged for user review by default.
+- **Pre-execution confirmation:** When instructed to perform git/GitHub operations, always confirm the exact plan, commands, and naming with the user before executing.
+- **Branch naming convention:** Always format feature branches as:
+  `module/<module-crate-name>/<issue-number>-<short-description>`
+  (e.g., `module/species-relationships/1-django-client-mermaid`). Never use numeric module prefixes like `module-2/...`.
+- **Standard Issue-to-Draft-PR Protocol:**
+  1. **Create Issue first:** Use `gh issue create` to get the assigned issue number (`#<issue-number>`).
+  2. **Branch:** Check out the branch adhering to `module/<module-crate-name>/<issue-number>-<short-description>`.
+  3. **Atomic commits:** Organize changes into focused atomic commits with Conventional Commit prefixes (e.g., `docs(species-relationships): ...`).
+  4. **Push:** Push the feature branch to `origin` with upstream tracking (`git push -u origin <branch-name>`).
+  5. **Local `main` cleanliness:** Never leave unpushed commits on local `main`. Keep local `main` synchronized with `origin/main`.
+  6. **Draft PR:** Create a Draft Pull Request targeting the default branch `main` via `gh pr create --draft`, linking back to the issue (`Resolves #<issue-number>`).
 
 ## Verification
 
