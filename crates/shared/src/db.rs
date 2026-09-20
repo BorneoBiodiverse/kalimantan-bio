@@ -14,6 +14,10 @@ use crate::core::{Observation, Species};
 ///
 /// A ready [`Pool<Postgres>`], or a [`sqlx::Error`].
 ///
+/// # Used By
+///
+/// - **API Server**: Single shared connection pool for all routes (called once at startup)
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -32,6 +36,14 @@ pub async fn create_pool(database_url: &str) -> Result<Pool<Postgres>, sqlx::Err
 /// # Returns
 ///
 /// The full list of species, or a [`sqlx::Error`].
+///
+/// # Used By
+///
+/// - **API Server**: All route handlers fetch data to pass to module functions
+///   - Search route: Fetches all species, passes to `search()`
+///   - Relationship route: Fetches dataset for relationship exploration
+///   - Taxonomy route: Fetches species for diversity analysis
+///   - Comparison route: Fetches species for comparison
 ///
 /// # Example
 ///
@@ -52,6 +64,13 @@ pub async fn fetch_all_species(pool: &Pool<Postgres>) -> Result<Vec<Species>, sq
 /// # Returns
 ///
 /// The species when found, `None` otherwise, or a [`sqlx::Error`].
+///
+/// # Used By
+///
+/// - **API Server**: Route handlers for specific species operations
+///   - Module 2 routes: Fetch center species for relationship exploration
+///   - Module 4 routes: Fetch specific species for comparison
+///   - Detail routes: Individual species pages
 ///
 /// # Example
 ///
@@ -75,6 +94,12 @@ pub async fn fetch_species_by_id(
 /// # Returns
 ///
 /// The list of observations, or a [`sqlx::Error`].
+///
+/// # Used By
+///
+/// - **API Server**: Route handlers needing observation data
+///   - Module 4 routes: Get observations for distribution comparison
+///   - Observation detail routes: Show species observation history
 ///
 /// # Example
 ///

@@ -16,6 +16,12 @@ use crate::error::ValidationError;
 ///
 /// `Ok(())` when valid, otherwise a [`ValidationError`].
 ///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Validate center species ID exists (min=1, max=1)
+/// - **Module 4 (species-comparison)**: Validate species ID list for comparison (min=2, max=10)
+/// - **Module 5 (knowledge-citations)**: Validate publication IDs for export (min=1, max=100)
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -41,6 +47,11 @@ pub fn validate_id_list(
 ///
 /// `Ok(())` when valid, otherwise a [`ValidationError`].
 ///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Validate min_score parameter (0.0-1.0)
+/// - **Module 4 (species-comparison)**: Validate individual weight values (0.0-1.0)
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -60,6 +71,11 @@ pub fn validate_score_range(score: f64, min: f64, max: f64) -> Result<(), Valida
 /// # Returns
 ///
 /// `Ok(())` when valid, otherwise a [`ValidationError`].
+///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Validate ScoreWeights before scoring (taxonomy + habitat + characteristic must sum to 1.0, tolerance 1e-9)
+/// - **Module 4 (species-comparison)**: Validate ScoringWeights before comparison (multi-dimensional weights must sum to 1.0, tolerance 1e-9)
 ///
 /// # Example
 ///
@@ -82,6 +98,11 @@ pub fn validate_weights_sum_to_one(
 /// # Returns
 ///
 /// `true` when at least one duplicate is present.
+///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Ensure no duplicate species IDs in dataset
+/// - **Module 4 (species-comparison)**: Ensure user didn't provide duplicate species IDs
 ///
 /// # Example
 ///

@@ -12,6 +12,13 @@
 ///
 /// The weighted combination of all scores.
 ///
+/// # Used By
+///
+/// - **Module 1 (species-search)**: Combine name match + taxonomy match + attribute match scores
+/// - **Module 2 (species-relationships)**: Combine taxonomy + habitat + characteristic scores
+/// - **Module 4 (species-comparison)**: Combine multi-dimensional similarity scores
+/// - **Module 5 (knowledge-citations)**: Combine topic match + recency + citation count scores
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -33,6 +40,11 @@ pub fn combine_weighted_scores(scores: &[(f64, f64)]) -> f64 {
 ///
 /// A normalized score between 0.0 and 1.0.
 ///
+/// # Used By
+///
+/// - **Module 1 (species-search)**: Normalize different scoring dimensions to comparable range
+/// - **Module 5 (knowledge-citations)**: Convert citation counts to 0-1 scores for weighting
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -51,6 +63,12 @@ pub fn normalize_score(score: f64, min: f64, max: f64) -> f64 {
 /// # Returns
 ///
 /// The same items, sorted by score descending.
+///
+/// # Used By
+///
+/// - **Module 1 (species-search)**: Return top matches by relevance
+/// - **Module 2 (species-relationships)**: Order related species by relationship strength
+/// - **Module 5 (knowledge-citations)**: Order publications by relevance
 ///
 /// # Example
 ///
@@ -72,6 +90,12 @@ pub fn rank_by_score<T>(items: Vec<(T, f64)>) -> Vec<(T, f64)> {
 ///
 /// Up to `n` highest-scoring items.
 ///
+/// # Used By
+///
+/// - **Module 1 (species-search)**: Return only top N matches (default 10)
+/// - **Module 2 (species-relationships)**: Return top N related species (max 50)
+/// - **Module 5 (knowledge-citations)**: Limit recommendation count
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -91,6 +115,11 @@ pub fn top_n<T>(items: Vec<(T, f64)>, n: usize) -> Vec<(T, f64)> {
 /// # Returns
 ///
 /// The items whose score is at least `min_score`.
+///
+/// # Used By
+///
+/// - **Module 1 (species-search)**: Filter weak matches below relevance threshold
+/// - **Module 2 (species-relationships)**: Only show relationships above minimum strength
 ///
 /// # Example
 ///

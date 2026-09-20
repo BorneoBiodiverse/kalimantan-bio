@@ -16,6 +16,12 @@ use crate::core::{TaxonomicRank, Taxonomy};
 ///
 /// A similarity score between 0.0 (no shared rank) and 1.0 (identical genus).
 ///
+/// # Used By
+///
+/// - **Module 1 (species-search)**: Boost search relevance for taxonomic matches
+/// - **Module 2 (species-relationships)**: Taxonomy dimension scoring (weight 0.50)
+/// - **Module 4 (species-comparison)**: Taxonomy similarity in comparisons
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -35,6 +41,12 @@ pub fn calculate_taxonomy_similarity(a: &Taxonomy, b: &Taxonomy) -> f64 {
 /// # Returns
 ///
 /// A human-readable hierarchy path.
+///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Generate taxonomy explanations
+/// - **Module 3 (taxonomy)**: Display full taxonomy paths in reports
+/// - **Module 4 (species-comparison)**: Show taxonomy in comparison tables
 ///
 /// # Example
 ///
@@ -56,6 +68,11 @@ pub fn build_taxonomy_path(taxonomy: &Taxonomy) -> String {
 /// # Returns
 ///
 /// The deepest shared rank, or `None` when no rank matches.
+///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Generate explanations like "Share the same family"
+/// - **Module 4 (species-comparison)**: Identify taxonomic divergence point
 ///
 /// # Example
 ///
@@ -79,6 +96,11 @@ pub fn get_common_rank(a: &Taxonomy, b: &Taxonomy) -> Option<TaxonomicRank> {
 /// # Returns
 ///
 /// A distance between 0 and 6.
+///
+/// # Used By
+///
+/// - **Module 2 (species-relationships)**: Alternative distance metric for relationships
+/// - **Module 3 (taxonomy)**: Measure taxonomic diversity spread
 ///
 /// # Example
 ///
