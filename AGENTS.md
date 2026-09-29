@@ -19,6 +19,20 @@ The workspace API surface comes from these documents (do not invent signatures):
 - `MASTERPLAN.md` — Section 5 (shared library), Section 4 (workspace, Cargo.toml), Section 16 (inter-module `pub fn` model)
 - Module planning docs — Section 17 of each (`planning-modul1-…`, `planning-modul-2-…`, `Planning_Modul_3_…`, `Planning_Module_4_…`, `Planning_Modul_5_…`)
 
+## Module Reference Table
+
+Each crate has its own `AGENTS.md` with module-specific context. Start here, then navigate to the module you're working on.
+
+| Crate | Package | Module | AGENTS.md | Planning Doc (Section 17) |
+|-------|---------|--------|-----------|---------------------------|
+| `shared` | `kalimantanbio-shared` | Core/Foundation | [`crates/shared/AGENTS.md`](crates/shared/AGENTS.md) | `MASTERPLAN.md` §5 |
+| `species-search` | `species-search` | Module 1 | [`crates/species-search/AGENTS.md`](crates/species-search/AGENTS.md) | `planning-modul1-intelligent-species-search.md` §17 |
+| `species-relationships` | `species-relationships` | Module 2 | [`crates/species-relationships/AGENTS.md`](crates/species-relationships/AGENTS.md) | `planning-modul-2-species-relationship-explorer.md` §17 |
+| `taxonomy` | `taxonomy` | Module 3 | [`crates/taxonomy/AGENTS.md`](crates/taxonomy/AGENTS.md) | `Planning_Modul_3_Taxonomy.md` §17 |
+| `species-comparison` | `species-comparison` | Module 4 | [`crates/species-comparison/AGENTS.md`](crates/species-comparison/AGENTS.md) | `Planning_Module_4_Comparative_Species_Explorer.md` §17 |
+| `knowledge-citations` | `knowledge-citations` | Module 5 | [`crates/knowledge-citations/AGENTS.md`](crates/knowledge-citations/AGENTS.md) | `Planning_Modul_5_Biodiversity_Knowledge_Citation_Explorer.md` §17 |
+| `api-server` | `api-server` | API Gateway | [`crates/api-server/AGENTS.md`](crates/api-server/AGENTS.md) | `MASTERPLAN.md` §8, §16 |
+
 ## Workspace layout
 
 7 crates under `crates/`:
@@ -143,11 +157,37 @@ Module crates depend only on `kalimantanbio-shared` and workspace crates they ge
 - **No autonomous git mutations:** Do not run `git add`, `git commit`, `git push`, `git restore --staged`, `git reset`, or other git state commands without explicit user instruction. All file modifications remain unstaged for user review by default.
 - **Pre-execution confirmation:** When instructed to perform git/GitHub operations, always confirm the exact plan, commands, and naming with the user before executing.
 - **Branch naming convention:** Always format feature branches as:
-  `module/<module-crate-name>/<issue-number>-<short-description>`
-  (e.g., `module/species-relationships/1-django-client-mermaid`). Never use numeric module prefixes like `module-2/...`.
+  `module<number>/<type>/<short-description>`
+  
+  Module numbers:
+  - `module1` — species-search
+  - `module2` — species-relationships
+  - `module3` — taxonomy
+  - `module4` — species-comparison
+  - `module5` — knowledge-citations
+  - `module6` — shared
+  - `module7` — api-server
+
+  Type prefix (conventional commits):
+  - `feat` — new feature
+  - `fix` — bug fix
+  - `chore` — maintenance, dependencies, config
+  - `docs` — documentation only
+  - `refactor` — code restructuring without behavior change
+
+  Examples:
+  - `module1/feat/natural-language-search`
+  - `module2/fix/relationship-score-validation`
+  - `module3/docs/taxonomy-report-rustdoc`
+  - `module4/refactor/comparison-pipeline`
+  - `module5/chore/update-citation-dependencies`
+  - `module6/feat/shared-fixtures`
+  - `module7/fix/cors-django-origin`
+
+  Never use crate names directly in branch prefix (e.g., not `module/species-search/...`).
 - **Standard Issue-to-Draft-PR Protocol:**
   1. **Create Issue first:** Use `gh issue create` to get the assigned issue number (`#<issue-number>`).
-  2. **Branch:** Check out the branch adhering to `module/<module-crate-name>/<issue-number>-<short-description>`.
+  2. **Branch:** Check out the branch adhering to `module<number>/<type>/<short-description>`.
   3. **Atomic commits:** Organize changes into focused atomic commits with Conventional Commit prefixes (e.g., `docs(species-relationships): ...`).
   4. **Push:** Push the feature branch to `origin` with upstream tracking (`git push -u origin <branch-name>`).
   5. **Local `main` cleanliness:** Never leave unpushed commits on local `main`. Keep local `main` synchronized with `origin/main`.
