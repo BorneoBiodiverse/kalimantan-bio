@@ -26,7 +26,16 @@ use std::hash::Hash;
 /// let score = jaccard_similarity(&set_a, &set_b);
 /// ```
 pub fn jaccard_similarity<T: Hash + Eq>(a: &HashSet<T>, b: &HashSet<T>) -> f64 {
-    todo!("shared collections phase 3: jaccard_similarity")
+    if a.is_empty() && b.is_empty() {
+        return 0.0;
+    }
+    let intersection_count = a.intersection(b).count();
+    let union_count = a.union(b).count();
+    if union_count == 0 {
+        0.0
+    } else {
+        intersection_count as f64 / union_count as f64
+    }
 }
 
 /// Set intersection: elements present in both sets.
@@ -51,7 +60,7 @@ pub fn jaccard_similarity<T: Hash + Eq>(a: &HashSet<T>, b: &HashSet<T>) -> f64 {
 /// let common = set_intersection(&set_a, &set_b);
 /// ```
 pub fn set_intersection<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> HashSet<T> {
-    todo!("shared collections phase 3: set_intersection")
+    a.intersection(b).cloned().collect()
 }
 
 /// Set difference: elements in `A` but not in `B`.
@@ -76,7 +85,7 @@ pub fn set_intersection<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) ->
 /// let missing = set_difference(&ours, &reference);
 /// ```
 pub fn set_difference<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> Vec<T> {
-    todo!("shared collections phase 3: set_difference")
+    a.difference(b).cloned().collect()
 }
 
 /// Set union: all elements from both sets.
@@ -100,5 +109,5 @@ pub fn set_difference<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> V
 /// let combined = set_union(&set_a, &set_b);
 /// ```
 pub fn set_union<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> HashSet<T> {
-    todo!("shared collections phase 3: set_union")
+    a.union(b).cloned().collect()
 }
