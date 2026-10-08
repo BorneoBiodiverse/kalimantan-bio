@@ -10,6 +10,7 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub mod gap_analysis;
 pub mod ingestion;
 pub mod types;
 
@@ -39,7 +40,7 @@ pub fn analyze_taxonomic_gap(
     our_genera: &HashSet<String>,
     reference_genera: &HashSet<String>,
 ) -> GapReport {
-    todo!("taxonomy phase 5: analyze_taxonomic_gap")
+    gap_analysis::analyze_taxonomic_gap(our_genera, reference_genera)
 }
 
 /// Calculate diversity statistics for a species list.

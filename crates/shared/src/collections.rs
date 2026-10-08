@@ -99,7 +99,7 @@ pub fn set_intersection<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) ->
 /// let missing = set_difference(&ours, &reference);
 /// ```
 pub fn set_difference<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> Vec<T> {
-    todo!("shared collections phase 3: set_difference")
+    a.difference(b).cloned().collect()
 }
 
 /// Set union: all elements from both sets.
@@ -123,7 +123,7 @@ pub fn set_difference<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> V
 /// let combined = set_union(&set_a, &set_b);
 /// ```
 pub fn set_union<T: Hash + Eq + Clone>(a: &HashSet<T>, b: &HashSet<T>) -> HashSet<T> {
-    todo!("shared collections phase 3: set_union")
+    a.union(b).cloned().collect()
 }
 
 #[cfg(test)]
