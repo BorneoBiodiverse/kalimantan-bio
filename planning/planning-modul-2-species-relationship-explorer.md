@@ -892,3 +892,65 @@ Status saat ini di dokumen: **Rustdoc planned** (belum diklaim verified).
 | Rustdoc (20%) | Rustdoc diwajibkan untuk semua `pub fn` (Bagian 17.5) | Generate & aksesibel |
 | Komunikasi Antar Module (40%) | Batas `mod`/`pub fn` (17.1–17.2), visibilitas (17.3), matriks komunikasi (17.4) termasuk relasi M1/M3/M4/M5 dari tabel Bagian 13 | Interface diimplementasikan & diuji |
 
+---
+
+## 19. Unified Module Contract
+
+This module follows the common contract used by all five module plans. The
+plans remain separate for agent context and module ownership.
+
+### 19.1 Dependency boundary
+
+`species-relationships` may depend on `kalimantanbio-shared` and approved
+workspace dependencies only. It must not depend on another module crate.
+Cross-module composition is performed only by `api-server`.
+
+Shared owns `Species`, `Taxonomy`, `Observation`, shared errors, collection,
+taxonomy, scoring, validation, fixture, and database APIs. This module owns
+relationship evidence, scoring policy, explanations, and network result types.
+It must not redefine shared types, query PostgreSQL directly, or render graph
+layouts.
+
+### 19.2 Stable module API
+
+```rust
+pub fn calculate_relationship(
+    a: &Species,
+    b: &Species,
+    habitats_a: &HashSet<String>,
+    habitats_b: &HashSet<String>,
+    weights: &ScoreWeights,
+) -> Result<RelationshipScore, ValidationError>
+
+pub fn explore_relationships(
+    input: &[Species],
+    query: &RelationshipQuery,
+    weights: &ScoreWeights,
+) -> Result<ExplorerResult, ExplorerError>
+```
+
+Both functions consume snapshots. Database loading, if needed by an HTTP
+request, is owned by the application/shared adapter layer before invocation.
+
+### 19.3 Loophole checks
+
+No module-to-module imports, duplicated core domain types, inferred ecological
+relationships, unvalidated weights, hidden database calls, frontend graph
+coordinates, or undocumented public helpers are allowed. Network output is
+domain data only: nodes, edges, scores, and explanations.
+
+### 19.4 Binding data prerequisite
+
+The current shared `Species` contract contains taxonomy and conservation data,
+but does not contain canonical habitat or characteristic collections. The
+three-dimensional scoring plan therefore cannot be implemented by reading
+undeclared fields. Before implementation, `kalimantanbio-shared` must provide
+one canonical, documented source for those two dimensions (shared fields or a
+shared evidence accessor). A module-local replacement type, database query,
+or guessed ecological value is forbidden. Until that shared contract exists,
+the implementation must keep the affected dimensions explicitly unavailable
+and report their coverage rather than silently assigning scores.
+
+The runtime dependency remains `kalimantanbio-shared` only; `serde` is for
+serialization of module-owned result types and `tokio` is test-only.
+

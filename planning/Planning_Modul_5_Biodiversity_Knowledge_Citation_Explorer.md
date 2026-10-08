@@ -575,9 +575,9 @@ Bagian ini menjelaskan batas `mod` dan `pub fn` Modul 5 sebagai bukti pemenuhan 
 
 | `pub fn` | Provider | Consumer Potensial | Purpose | Input | Output | Why Needed |
 | --- | --- | --- | --- | --- | --- | --- |
-| `explore_knowledge` | Modul 5 | Axum handler `/api/v1/knowledge/*` | Entry point pipeline Tahap 1–5 | query (spesies/topik/lokasi), dataset publikasi | `Result<KnowledgeReport, ModuleError>` | Kapabilitas utama modul untuk aplikasi dan modul lain. |
-| `recommend_citations` *(opsional)* | Modul 5 | Axum handler `/api/v1/knowledge/citations` | Merekomendasikan publikasi relevan | query, publikasi | `Vec<Publication>` terurut | Rekomendasi sitasi untuk pengguna/modul lain. |
-| `export_citations` *(opsional)* | Modul 5 | Axum handler `/api/v1/knowledge/export` | Menyusun string APA dan BibTeX | daftar publikasi | `CitationExport` | Membuka konsumsi sitasi ke luar sistem. |
+| `explore_knowledge` | Modul 5 | Axum handler `/api/v1/publications` | Entry point pipeline Tahap 1–5 | query (spesies/topik/lokasi), dataset publikasi | `Result<KnowledgeReport, ModuleError>` | Kapabilitas utama modul untuk aplikasi dan modul lain. |
+| `recommend_citations` *(opsional)* | Modul 5 | Axum handler `/api/v1/citations` | Merekomendasikan publikasi relevan | query, publikasi | `Vec<Publication>` terurut | Rekomendasi sitasi untuk pengguna/modul lain. |
+| `export_citations` *(opsional)* | Modul 5 | Axum handler `/api/v1/citations` | Menyusun string APA dan BibTeX | daftar publikasi | `CitationExport` | Membuka konsumsi sitasi ke luar sistem. |
 
 ```rust
 /// Menjelajahi pengetahuan dan sitasi terkait spesies/topik/lokasi.
@@ -615,9 +615,9 @@ pub fn explore_knowledge(
 ```text
 Modul 5 (Provider)
       │
-      │ pub fn explore_knowledge(...)
-      ▼
-Axum handler /api/v1/knowledge/*  (Receiver / Aplikasi)
+       │ pub fn explore_knowledge(...)
+       ▼
+Axum handler /api/v1/publications  (Receiver / Aplikasi)
       │  hasil: KnowledgeReport
       ▼
 Django API → Frontend
@@ -667,3 +667,60 @@ Status saat ini di dokumen: **Rustdoc planned** (belum diklaim verified).
 | Prioritas Modul (25%) | Prioritas fitur: species↔publication → topic → location → coverage → understudied | Implementasi fitur prioritas |
 | Rustdoc (20%) | Rustdoc diwajibkan untuk semua `pub fn` (Bagian 17.5) | Generate & aksesibel |
 | Komunikasi Antar Module (40%) | Batas `mod`/`pub fn` (17.1–17.2), visibilitas (17.3), matriks komunikasi (17.4) termasuk relasi M1/M2/M3 dari Bagian 13 | Interface diimplementasikan & diuji |
+
+---
+
+## 19. Unified Module Contract
+
+This module follows the common contract used by all five separate planning
+documents. Publication data is module-owned because it is not part of the
+shared biodiversity core model.
+
+### 19.1 Dependency boundary
+
+`knowledge-citations` may depend on `kalimantanbio-shared` and approved
+workspace dependencies only. It must not depend on another module crate.
+Cross-module composition is performed only by `api-server`.
+
+Shared owns cross-module species/taxonomy/observation types, text and stats
+utilities, scoring, validation, fixtures, errors, and database adapters. This
+module owns publication, author, topic, location, knowledge-network, and
+citation-export types and policies. It must not redefine shared core types or
+access SQLx directly from pure analysis functions.
+
+### 19.2 Stable module API
+
+```rust
+pub fn explore_knowledge(
+    query: &KnowledgeQuery,
+    publications: &[Publication],
+) -> Result<KnowledgeReport, ModuleError>
+
+pub fn recommend_citations<'a>(
+    items: &'a [Publication],
+    query: &PublicationQuery,
+    limit: usize,
+) -> Vec<&'a Publication>
+
+pub fn export_citations(
+    items: &[Publication],
+    format: CitationFormat,
+) -> String
+```
+
+### 19.3 Loophole checks
+
+Publication datasets must be explicit inputs and may come from fixtures or an
+application adapter. The module must not silently claim bibliographic
+verification, download restricted full text, depend on another module,
+duplicate shared core types, mutate input data, or emit HTML/UI layout.
+
+### 19.4 Binding data prerequisite
+
+Publication loading is an application/shared-adapter concern. The pure module
+functions receive publication snapshots and never query PostgreSQL, call an
+external publication service, or depend on another module. Citation output
+must preserve missing DOI/URL metadata as missing rather than inventing
+bibliographic values. The runtime dependency remains
+`kalimantanbio-shared` only; serialization is limited to module-owned types
+and `tokio` is test-only.

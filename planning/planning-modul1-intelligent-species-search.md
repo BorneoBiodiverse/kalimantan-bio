@@ -619,3 +619,56 @@ Status saat ini di dokumen: **Rustdoc planned** (rutin dihasilkan setelah fungsi
 | Prioritas Modul (25%) | Prioritas fitur awal: parsing → filter → scoring → rekomendasi | Implementasi fitur prioritas |
 | Rustdoc (20%) | Rustdoc diwajibkan untuk semua `pub fn` (Bagian 17.6) | Generate & aksesibel |
 | Komunikasi Antar Module (40%) | Batas `mod`/`pub fn` (17.1–17.2), visibilitas (17.3), matriks komunikasi (17.4) | Interface diimplementasikan & diuji |
+
+---
+
+## 19. Unified Module Contract
+
+This module follows the same contract as Modules 2–5. The planning files remain
+separate, but their ownership, dependencies, and application-layer composition
+rules are identical.
+
+### 19.1 Dependency boundary
+
+`species-search` may depend on `kalimantanbio-shared` and approved workspace
+dependencies only. It must not depend on another module crate. Cross-module
+composition is performed only by `api-server`.
+
+Shared owns `Species`, `Taxonomy`, shared errors, text, taxonomy, scoring,
+validation, statistics, fixtures, and database APIs. This module owns query
+parsing, filter semantics, relevance scoring, and query recommendation. It
+must not redefine shared types, query PostgreSQL directly, or call another
+module.
+
+### 19.2 Stable module API
+
+```rust
+pub fn search<'a>(
+    raw_query: &str,
+    all_species: &'a [Species],
+) -> Vec<(&'a Species, f64)>
+
+pub fn recommend_related_queries(
+    raw_query: &str,
+    all_species: &[Species],
+) -> Vec<(String, f64)>
+```
+
+Both functions consume an explicit species snapshot. Database loading, if
+needed by an HTTP request, is owned by the application/shared adapter layer
+before invocation. Helpers remain private.
+
+### 19.3 Loophole checks
+
+The implementation must not introduce module-to-module Cargo dependencies,
+duplicate `Species`/`Taxonomy` definitions, hidden global state, implicit
+database access, GUI/layout data, or undocumented public helpers. Route
+handlers belong to `api-server`; this crate exposes domain functions only.
+
+### 19.4 Binding data prerequisite
+
+The search fields used by filtering and scoring must be present in the shared
+`Species` contract. No module-local replacement record, hidden database query,
+cache, network client, or guessed field may be introduced. The runtime
+dependency remains `kalimantanbio-shared` only; serialization is limited to
+module-owned types and `tokio` is test-only.
