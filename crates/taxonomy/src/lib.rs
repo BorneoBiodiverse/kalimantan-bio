@@ -10,6 +10,7 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub mod ingestion;
 pub mod types;
 
 use std::collections::HashSet;
