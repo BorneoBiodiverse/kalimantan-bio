@@ -674,3 +674,55 @@ Status saat ini di dokumen: **Rustdoc planned** (belum diklaim verified).
 | Prioritas Modul (25%) | Prioritas fitur: parsing → tree → diversity/endemic → coverage/gap | Implementasi fitur prioritas |
 | Rustdoc (20%) | Rustdoc diwajibkan untuk semua `pub fn` (Bagian 17.5) | Generate & aksesibel |
 | Komunikasi Antar Module (40%) | Batas `mod`/`pub fn` (17.1–17.2), visibilitas (17.3), matriks komunikasi (17.4) | Interface diimplementasikan & diuji |
+
+---
+
+## 19. Unified Module Contract
+
+This module follows the common contract used by all five separate planning
+documents. It remains independently implementable and independently testable.
+
+### 19.1 Dependency boundary
+
+`taxonomy` may depend on `kalimantanbio-shared` and approved workspace
+dependencies only. It must not depend on another module crate. Cross-module
+composition is performed only by `api-server`.
+
+Shared owns `Species`, `Taxonomy`, `TaxonomicRank`, shared errors, collection
+and statistics utilities, fixtures, and database adapters. This module owns
+raw taxonomy input parsing, tree construction, endemic classification,
+diversity reporting, and gap-report semantics. It must not redefine shared
+core types or access SQLx directly.
+
+### 19.2 Stable module API
+
+```rust
+pub fn analyze_taxonomic_gap(
+    our_genera: &HashSet<String>,
+    reference_genera: &HashSet<String>,
+) -> GapReport
+
+pub fn calculate_diversity(species_list: &[Species]) -> DiversityStats
+
+pub fn generate_taxonomy_report(
+    input: &BioDataInput,
+) -> Result<ExplorationReport, PipelineError>
+```
+
+### 19.3 Loophole checks
+
+Reference checklists are explicit inputs, not hidden downloads. The module
+must not silently invent missing taxa, redefine shared taxonomy structures,
+depend on another module, mutate global state, access the database inside pure
+functions, or expose undocumented helpers. Taxonomy output contains domain
+tree/report data and no UI layout.
+
+### 19.4 Binding data prerequisite
+
+`RawSpeciesRecord` is a taxonomy-ingestion record, not a replacement for the
+shared `Species` record: it contains only identity, scientific name, and genus
+linkage. The adapter must validate that linkage against the shared taxonomy
+contract before any report claims species-level completeness. No field may be
+silently invented during parsing, and no second `Species` type may be created
+in this crate. The runtime dependency remains `kalimantanbio-shared` only;
+serialization is limited to module-owned types and `tokio` is test-only.

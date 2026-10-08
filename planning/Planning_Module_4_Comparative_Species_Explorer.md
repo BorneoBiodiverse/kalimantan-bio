@@ -820,3 +820,58 @@ Status saat ini di dokumen: **Rustdoc planned** (belum diklaim verified).
 | Prioritas Modul (25%) | Prioritas fitur: validasi → matriks → shared/unique → similarity → similar-species | Implementasi fitur prioritas |
 | Rustdoc (20%) | Rustdoc diwajibkan untuk semua `pub fn` (Bagian 17.5) | Generate & aksesibel |
 | Komunikasi Antar Module (40%) | Batas `mod`/`pub fn` (17.1–17.2), visibilitas (17.3), matriks komunikasi (17.4) termasuk relasi M1/M2/M3 dari Bagian 13 | Interface diimplementasikan & diuji |
+
+---
+
+## 19. Unified Module Contract
+
+This module follows the common contract used by all five separate planning
+documents. It accepts explicit snapshots and does not own persistence.
+
+### 19.1 Dependency boundary
+
+`species-comparison` may depend on `kalimantanbio-shared` and approved
+workspace dependencies only. It must not depend on another module crate.
+Cross-module composition is performed only by `api-server`.
+
+Shared owns `Species`, `Taxonomy`, `Observation`, shared errors, collection,
+taxonomy, scoring, validation, fixtures, and database adapters. This module
+owns comparison queries, attribute matrices, pair scoring policy, difference
+analysis, and summaries. It must not redefine shared core types or access SQLx
+directly from comparison functions.
+
+### 19.2 Stable module API
+
+```rust
+pub fn calculate_pair_similarity(
+    a: &Species,
+    b: &Species,
+    kabupaten_a: &HashSet<u64>,
+    kabupaten_b: &HashSet<u64>,
+    weights: &ScoringWeights,
+) -> SimilarityScore
+
+pub fn compare_species(
+    query: &ComparisonQuery,
+    species: &[Species],
+    observations: &[Observation],
+) -> Result<ComparisonResult, ModuleError>
+```
+
+### 19.3 Loophole checks
+
+The module must not fetch data implicitly, invent observation records, depend
+on another module, duplicate shared types, mutate inputs, or emit UI/layout
+coordinates. ID count and duplicate validation must use the shared validation
+contract; all source datasets are explicit function inputs.
+
+### 19.4 Binding data prerequisite
+
+Species and observation retrieval is an application/shared-adapter concern.
+`compare_species` receives the complete snapshots it compares and must not
+query PostgreSQL, call another module, or substitute fabricated observations.
+Results must be valid with incomplete observation coverage and expose that
+limitation through the result rather than treating missing observations as
+biological absence. The runtime dependency remains
+`kalimantanbio-shared` only; serialization is limited to module-owned types
+and `tokio` is test-only.
