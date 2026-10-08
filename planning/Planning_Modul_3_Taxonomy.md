@@ -217,7 +217,7 @@ Membaca data mentah, memvalidasi, dan memetakan ke dalam Domain Model tanpa muta
 | `parse_species` | `fn parse_species(raw: &[RawSpeciesRecord]) -> Result<Species, ParseError>` | **MODULE-SPECIFIC**: Memvalidasi data spesies dan memastikan `genus_id` valid. |
 | `validate_hierarchy` | `fn validate_hierarchy(taxons: &[Taxon]) -> bool` | **MODULE-SPECIFIC**: Pure function untuk mengecek tidak adanya cyclic reference atau orphan node. |
 
-**Person in Charge:** **Anggota 1 — Data ingestion, parsing, dan validasi hierarki (nama menyusul).**
+**Person in Charge:** **Anggota 1 — Data ingestion, parsing, dan validasi hierarki (Dylan - 11241027).**
 
 ---
 
@@ -232,7 +232,7 @@ Membangun struktur pohon (hirarki) menggunakan pendekatan FP (rekursi, folding, 
 | `get_subtree_species` | `fn get_subtree_species(target: &TaxonId, map: &HashMap<TaxonId, Vec<TaxonId>>, species: &[Species]) -> Vec<Species>` | **MODULE-SPECIFIC**: Mengumpulkan semua spesies yang berada di bawah target takson. |
 | `extract_our_genera` | `fn extract_our_genera(taxons: &[Taxon]) -> HashSet<String>` | **MODULE-SPECIFIC**: Mengekstrak semua nama Genus yang ada di database lokal untuk keperluan analisis gap. |
 
-**Person in Charge:** **Anggota 2 — Konstruksi pohon taksonomi dan traversal (nama menyusul).**
+**Person in Charge:** **Anggota 2 — Konstruksi pohon taksonomi dan traversal (nabilah - 11241067).**
 
 ---
 
@@ -249,7 +249,7 @@ Melakukan agregasi data untuk menghitung statistik dan memfilter spesies endemik
 | `rank_taxon_richness` | `fn rank_taxon_richness(map: &HashMap<TaxonId, Vec<TaxonId>>, species: &[Species]) -> Vec<(Taxon, usize)>` | **Uses SHARED `frequency_distribution`**: Mengurutkan Famili berdasarkan jumlah spesies terbanyak (Species Richness). |
 | `get_subtree_species` | `fn get_subtree_species(target: &TaxonId, map: &HashMap<TaxonId, Vec<TaxonId>>, species: &[Species]) -> Vec<Species>` | **MODULE-SPECIFIC**: Mengumpulkan semua spesies yang berada di bawah target takson. |
 
-**Person in Charge:** **Anggota 3 — Analisis keanekaragaman dan endemik (nama menyusul).**
+**Person in Charge:** **Anggota 3 — Analisis keanekaragaman dan endemik (ella - 11241021).**
 
 ---
 
@@ -266,7 +266,7 @@ Membandingkan data internal dengan referensi eksternal untuk menemukan Taxonomic
 | `extract_our_genera` | `fn extract_our_genera(taxons: &[Taxon]) -> HashSet<String>` | **MODULE-SPECIFIC**: Mengekstrak semua nama Genus yang ada di database lokal. |
 | `generate_gap_report` | `fn generate_gap_report(missing: &[String], score: f64) -> GapReport` | **MODULE-SPECIFIC**: Menyusun hasil analisis gap menjadi struktur laporan. |
 
-**Person in Charge:** **Anggota 4 — Analisis coverage dan gap (nama menyusul).**
+**Person in Charge:** **Anggota 4 — Analisis coverage dan gap (wisnu - 11241063).**
 
 ---
 
@@ -283,7 +283,7 @@ Menggabungkan fungsi-fungsi di atas menjadi entry point dan melakukan End-to-End
 | Unit Tests | `mod tests { ... }` | Menguji `get_lineage`, `find_missing_taxa`, dan `calculate_diversity` dengan dummy data. |
 | Pipeline Validation | `cargo test` | Menjalankan seluruh skenario pengujian secara otomatis. |
 
-**Person in Charge:** **Anggota 5 — Integrasi pipeline, unit testing, dan dokumentasi (nama menyusul).**
+**Person in Charge:** **Anggota 5 — Integrasi pipeline, unit testing, dan dokumentasi (abbie - 11241001).**
 
 > **Catatan:** Setiap PIC tetap bertanggung jawab terhadap pengujian fungsi yang mereka implementasikan. Jika tahap ini merupakan tahap integrasi, PIC berfokus pada pengujian antar-komponen dan pengujian end-to-end.
 
