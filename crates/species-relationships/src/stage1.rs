@@ -13,16 +13,16 @@ use std::collections::HashSet;
 
 use kalimantanbio_shared::core::{Species, Taxonomy};
 
-use crate::types::{ExplorerError, RelationshipQuery, ScoreWeights};
+use crate::types::{ExplorerError, RelationshipQuery, ScoreWeights, SpeciesId};
 
 /// Membersihkan spasi berlebih pada teks (trim dan merapatkan spasi ganda)
 /// tanpa mengubah kapitalisasi huruf.
-pub(crate) fn sanitize_name(s: &str) -> String {
+fn sanitize_name(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Menormalisasi label: merapikan spasi dan mengubah ke huruf kecil.
-pub(crate) fn normalize_label(s: &str) -> String {
+fn normalize_label(s: &str) -> String {
     sanitize_name(s).to_lowercase()
 }
 
@@ -159,6 +159,19 @@ pub(crate) fn validate_weights(weights: &ScoreWeights) -> Result<(), ExplorerErr
     }
 
     Ok(())
+}
+
+/// Mencari referensi spesies pusat berdasarkan ID pada snapshot dataset.
+///
+/// Menghasilkan `Ok(&Species)` jika ditemukan, atau `Err(ExplorerError::SpeciesNotFound)` jika tidak ada.
+pub(crate) fn find_species(
+    species: &[Species],
+    id: SpeciesId,
+) -> Result<&Species, ExplorerError> {
+    species
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or(ExplorerError::SpeciesNotFound(id))
 }
 
 #[cfg(test)]
@@ -378,5 +391,20 @@ mod tests {
             characteristic: 0.30, // Total 1.10
         };
         assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
+    }
+
+    #[test]
+    fn test_find_species() {
+        let list = vec![
+            sample_species(10, "Shorea leprosula"),
+            sample_species(20, "Dipterocarpus grandiflorus"),
+        ];
+
+        let found = find_species(&list, 10);
+        assert!(found.is_ok());
+        assert_eq!(found.unwrap().id, 10);
+
+        let not_found = find_species(&list, 99);
+        assert_eq!(not_found, Err(ExplorerError::SpeciesNotFound(99)));
     }
 }
