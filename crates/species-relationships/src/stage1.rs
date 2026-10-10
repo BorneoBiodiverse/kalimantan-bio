@@ -13,7 +13,7 @@ use std::collections::HashSet;
 
 use kalimantanbio_shared::core::{Species, Taxonomy};
 
-use crate::types::ExplorerError;
+use crate::types::{ExplorerError, RelationshipQuery, ScoreWeights};
 
 /// Membersihkan spasi berlebih pada teks (trim dan merapatkan spasi ganda)
 /// tanpa mengubah kapitalisasi huruf.
@@ -107,6 +107,58 @@ pub(crate) fn prepare_species(input: &[Species]) -> Result<Vec<Species>, Explore
             Ok(normalized)
         })
         .collect()
+}
+
+/// Memvalidasi parameter kueri relasi [`RelationshipQuery`].
+///
+/// Aturan validasi:
+/// - `species_id` harus > 0.
+/// - `min_score` harus bernilai finite dan dalam rentang `0.0..=1.0`.
+/// - `limit` harus dalam rentang `1..=50`.
+pub(crate) fn validate_query(query: &RelationshipQuery) -> Result<(), ExplorerError> {
+    if query.species_id == 0 {
+        return Err(ExplorerError::InvalidQuery(
+            "species_id must be greater than 0".to_string(),
+        ));
+    }
+
+    if !query.min_score.is_finite() || query.min_score < 0.0 || query.min_score > 1.0 {
+        return Err(ExplorerError::InvalidQuery(
+            "min_score must be a finite number between 0.0 and 1.0".to_string(),
+        ));
+    }
+
+    if query.limit < 1 || query.limit > 50 {
+        return Err(ExplorerError::InvalidQuery(
+            "limit must be between 1 and 50".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Memvalidasi konfigurasi bobot [`ScoreWeights`].
+///
+/// Memastikan:
+/// - Semua bobot bernilai finite dan non-negatif (`>= 0.0`).
+/// - Jumlah total bobot bernilai `1.0` dengan batas toleransi `1e-9`.
+pub(crate) fn validate_weights(weights: &ScoreWeights) -> Result<(), ExplorerError> {
+    let weights_slice = [weights.taxonomy, weights.habitat, weights.characteristic];
+
+    let all_valid = weights_slice
+        .iter()
+        .all(|&w| w.is_finite() && w >= 0.0);
+
+    if !all_valid {
+        return Err(ExplorerError::InvalidWeights);
+    }
+
+    let sum: f64 = weights_slice.iter().sum();
+    if (sum - 1.0).abs() > 1e-9 {
+        return Err(ExplorerError::InvalidWeights);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -215,5 +267,116 @@ mod tests {
         let list = vec![sample_species(0, "Shorea leprosula")];
         let result = prepare_species(&list);
         assert!(matches!(result, Err(ExplorerError::InvalidDataset(_))));
+    }
+
+    #[test]
+    fn test_validate_query_valid() {
+        let query = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.20,
+            limit: 10,
+            required_basis: None,
+        };
+        assert!(validate_query(&query).is_ok());
+    }
+
+    #[test]
+    fn test_validate_query_zero_id() {
+        let query = RelationshipQuery {
+            species_id: 0,
+            min_score: 0.20,
+            limit: 10,
+            required_basis: None,
+        };
+        assert!(matches!(validate_query(&query), Err(ExplorerError::InvalidQuery(_))));
+    }
+
+    #[test]
+    fn test_validate_query_invalid_scores() {
+        // Negatif
+        let q_neg = RelationshipQuery {
+            species_id: 1,
+            min_score: -0.01,
+            limit: 10,
+            required_basis: None,
+        };
+        assert!(matches!(validate_query(&q_neg), Err(ExplorerError::InvalidQuery(_))));
+
+        // Di atas 1.0
+        let q_high = RelationshipQuery {
+            species_id: 1,
+            min_score: 1.05,
+            limit: 10,
+            required_basis: None,
+        };
+        assert!(matches!(validate_query(&q_high), Err(ExplorerError::InvalidQuery(_))));
+
+        // NaN
+        let q_nan = RelationshipQuery {
+            species_id: 1,
+            min_score: f64::NAN,
+            limit: 10,
+            required_basis: None,
+        };
+        assert!(matches!(validate_query(&q_nan), Err(ExplorerError::InvalidQuery(_))));
+    }
+
+    #[test]
+    fn test_validate_query_invalid_limits() {
+        let q_zero = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.20,
+            limit: 0,
+            required_basis: None,
+        };
+        assert!(matches!(validate_query(&q_zero), Err(ExplorerError::InvalidQuery(_))));
+
+        let q_over = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.20,
+            limit: 51,
+            required_basis: None,
+        };
+        assert!(matches!(validate_query(&q_over), Err(ExplorerError::InvalidQuery(_))));
+    }
+
+    #[test]
+    fn test_validate_weights_valid() {
+        let weights = ScoreWeights {
+            taxonomy: 0.50,
+            habitat: 0.30,
+            characteristic: 0.20,
+        };
+        assert!(validate_weights(&weights).is_ok());
+    }
+
+    #[test]
+    fn test_validate_weights_negative() {
+        let weights = ScoreWeights {
+            taxonomy: -0.10,
+            habitat: 0.60,
+            characteristic: 0.50,
+        };
+        assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
+    }
+
+    #[test]
+    fn test_validate_weights_nan() {
+        let weights = ScoreWeights {
+            taxonomy: f64::NAN,
+            habitat: 0.50,
+            characteristic: 0.50,
+        };
+        assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
+    }
+
+    #[test]
+    fn test_validate_weights_sum_mismatch() {
+        let weights = ScoreWeights {
+            taxonomy: 0.50,
+            habitat: 0.30,
+            characteristic: 0.30, // Total 1.10
+        };
+        assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
     }
 }
