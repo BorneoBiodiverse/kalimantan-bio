@@ -24,6 +24,8 @@
       "genus": "Pongo",
       "genus_id": 6
     },
+    "habitats": [],
+    "characteristics": [],
     "observation_count": 120,
     "recorded_individuals_total": 900,
     "latest_observation_year": 2025,
