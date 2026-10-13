@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        # Scoped to the crates that are rustfmt-clean today. Widen to
+        # `cargo fmt --all -- --check` once the remaining module crates are
+        # formatted, so this step does not fail on untouched files.
+        run: cargo fmt -p kalimantanbio-shared -p species-comparison -- --check
+
+      - name: Clippy
+        # Warnings are printed but do not fail the build: module function
+        # bodies are still `todo!()` stubs, which leaves their parameters
+        # unused. Tighten to `-- -D warnings` once the stubs are implemented.
+        run: cargo clippy --workspace --all-targets
+
+      - name: Test
+        run: cargo test --workspace
