@@ -1,8 +1,7 @@
 //! Input validation helpers.
 
-use std::hash::Hash;
-
 use crate::error::ValidationError;
+use std::{collections::HashSet, hash::Hash};
 
 /// Validate an ID list: min/max count and no duplicates.
 ///
@@ -32,7 +31,25 @@ pub fn validate_id_list(
     min_count: usize,
     max_count: usize,
 ) -> Result<(), ValidationError> {
-    todo!("shared validation phase 3: validate_id_list")
+    if ids.len() < min_count {
+        return Err(ValidationError::TooFewItems {
+            found: ids.len(),
+            minimum: min_count,
+        });
+    }
+
+    if ids.len() > max_count {
+        return Err(ValidationError::TooManyItems {
+            found: ids.len(),
+            maximum: max_count,
+        });
+    }
+
+    if has_duplicates(ids) {
+        return Err(ValidationError::DuplicateIds);
+    }
+
+    Ok(())
 }
 
 /// Validate that a score is finite and within `[min, max]`.
@@ -107,5 +124,12 @@ pub fn validate_weights_sum_to_one(weights: &[f64], tolerance: f64) -> Result<()
 /// assert!(has_duplicates(&[1, 2, 2]));
 /// ```
 pub fn has_duplicates<T: Hash + Eq>(items: &[T]) -> bool {
-    todo!("shared validation phase 3: has_duplicates")
+    let mut set = HashSet::with_capacity(items.len());
+    for item in items {
+        if !set.insert(item) {
+            return true;
+        }
+    }
+
+    false
 }
