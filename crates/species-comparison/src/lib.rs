@@ -16,8 +16,9 @@ use std::collections::HashSet;
 
 use kalimantanbio_shared::core::{Observation, Species};
 
-use crate::types::{ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights,
-    SimilarityScore};
+use crate::types::{
+    ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights, SimilarityScore,
+};
 
 /// Compute the similarity between two species across all dimensions.
 ///

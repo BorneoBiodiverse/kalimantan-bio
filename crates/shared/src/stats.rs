@@ -24,10 +24,7 @@ use std::hash::Hash;
 /// ```rust,ignore
 /// let counts = count_by_key(&species, |s| s.taxonomy.family.clone());
 /// ```
-pub fn count_by_key<T, K: Hash + Eq>(
-    items: &[T],
-    key_fn: impl Fn(&T) -> K,
-) -> HashMap<K, usize> {
+pub fn count_by_key<T, K: Hash + Eq>(items: &[T], key_fn: impl Fn(&T) -> K) -> HashMap<K, usize> {
     todo!("shared stats phase 3: count_by_key")
 }
 

@@ -82,10 +82,7 @@ pub fn validate_score_range(score: f64, min: f64, max: f64) -> Result<(), Valida
 /// ```rust,ignore
 /// validate_weights_sum_to_one(&[0.6, 0.4], 1e-9)?;
 /// ```
-pub fn validate_weights_sum_to_one(
-    weights: &[f64],
-    tolerance: f64,
-) -> Result<(), ValidationError> {
+pub fn validate_weights_sum_to_one(weights: &[f64], tolerance: f64) -> Result<(), ValidationError> {
     todo!("shared validation phase 3: validate_weights_sum_to_one")
 }
 
