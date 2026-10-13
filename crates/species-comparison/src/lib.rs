@@ -20,6 +20,13 @@ use crate::types::{
     ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights, SimilarityScore,
 };
 
+/// Minimum number of species a comparison must request.
+pub(crate) const MIN_SPECIES: usize = 2;
+
+/// Maximum number of species a comparison may request (this is the bound the
+/// module passes to the shared `validate_id_list`).
+pub(crate) const MAX_SPECIES: usize = 10;
+
 /// Compute the similarity between two species across all dimensions.
 ///
 /// # Arguments
