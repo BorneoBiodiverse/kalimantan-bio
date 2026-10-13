@@ -12,5 +12,47 @@
     "family_id": 5,
     "genus": "Pongo",
     "genus_id": 6
+  },
+  {
+    "kingdom": "Animalia",
+    "kingdom_id": 1,
+    "phylum_division": "Chordata",
+    "phylum_division_id": 2,
+    "class": "Mammalia",
+    "class_id": 3,
+    "order": "Carnivora",
+    "order_id": 7,
+    "family": "Felidae",
+    "family_id": 8,
+    "genus": "Panthera",
+    "genus_id": 9
+  },
+  {
+    "kingdom": "Animalia",
+    "kingdom_id": 1,
+    "phylum_division": "Chordata",
+    "phylum_division_id": 2,
+    "class": "Mammalia",
+    "class_id": 3,
+    "order": "Carnivora",
+    "order_id": 7,
+    "family": "Felidae",
+    "family_id": 8,
+    "genus": "Neofelis",
+    "genus_id": 10
+  },
+  {
+    "kingdom": "Plantae",
+    "kingdom_id": 11,
+    "phylum_division": "Magnoliophyta",
+    "phylum_division_id": 12,
+    "class": "Magnoliopsida",
+    "class_id": 13,
+    "order": "Malpighiales",
+    "order_id": 14,
+    "family": "Rafflesiaceae",
+    "family_id": 15,
+    "genus": "Rafflesia",
+    "genus_id": 16
   }
 ]
