@@ -11,6 +11,7 @@
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
 pub mod types;
+pub(crate) mod stage1;
 
 use std::collections::HashSet;
 
