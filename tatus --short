@@ -1,0 +1,25 @@
+[1mdiff --git a/crates/shared/src/core.rs b/crates/shared/src/core.rs[m
+[1mindex c9ad3a5..c1d2ca9 100644[m
+[1m--- a/crates/shared/src/core.rs[m
+[1m+++ b/crates/shared/src/core.rs[m
+[36m@@ -85,6 +85,8 @@[m [mpub enum TaxonomicRank {[m
+     Family = 5,[m
+     /// Genus (rank 6).[m
+     Genus = 6,[m
+[32m+[m[32m    /// Species (rank 7).[m
+[32m+[m[32m    Species = 7,[m
+ }[m
+ [m
+ /// A verified observation record for a species.[m
+[1mdiff --git a/crates/taxonomy/src/lib.rs b/crates/taxonomy/src/lib.rs[m
+[1mindex a2f908e..a92621c 100644[m
+[1m--- a/crates/taxonomy/src/lib.rs[m
+[1m+++ b/crates/taxonomy/src/lib.rs[m
+[36m@@ -13,6 +13,7 @@[m
+ pub mod gap_analysis;[m
+ pub mod ingestion;[m
+ pub mod types;[m
+[32m+[m[32mpub mod taxonomictree;[m
+ [m
+ use std::collections::HashSet;[m
+ [m
