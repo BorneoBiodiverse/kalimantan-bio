@@ -85,6 +85,8 @@ pub enum TaxonomicRank {
     Family = 5,
     /// Genus (rank 6).
     Genus = 6,
+    /// Species (rank 7).
+    Species = 7,
 }
 
 /// A verified observation record for a species.

@@ -13,6 +13,7 @@
 pub mod gap_analysis;
 pub mod ingestion;
 pub mod types;
+pub mod taxonomictree;
 
 use std::collections::HashSet;
 
