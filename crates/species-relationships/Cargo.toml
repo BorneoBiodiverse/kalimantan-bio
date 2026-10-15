@@ -9,4 +9,5 @@ kalimantanbio-shared = { path = "../shared" }
 serde = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tokio = { workspace = true }

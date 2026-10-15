@@ -12,6 +12,8 @@
 
 pub mod types;
 
+pub(crate) mod stage4;
+
 use std::collections::HashSet;
 
 use kalimantanbio_shared::{core::Species, error::ValidationError};
