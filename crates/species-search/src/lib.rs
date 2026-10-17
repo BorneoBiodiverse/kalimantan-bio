@@ -10,6 +10,12 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub mod types;
+pub(crate) mod parser;
+pub(crate) mod filter;
+pub(crate) mod scoring;
+pub(crate) mod recommendation;
+
 use kalimantanbio_shared::core::Species;
 
 /// Search species by a natural-language or structured query.
