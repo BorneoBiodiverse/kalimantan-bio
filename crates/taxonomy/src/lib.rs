@@ -10,6 +10,7 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub mod diversity;
 pub mod gap_analysis;
 pub mod ingestion;
 pub mod types;
@@ -48,7 +49,7 @@ pub fn analyze_taxonomic_gap(
 ///
 /// # Arguments
 ///
-/// * `species_list` - The species dataset.
+/// * `species_subset` - The species dataset.
 ///
 /// # Returns
 ///
@@ -59,8 +60,8 @@ pub fn analyze_taxonomic_gap(
 /// ```rust,ignore
 /// let stats = calculate_diversity(&species);
 /// ```
-pub fn calculate_diversity(species_list: &[Species]) -> DiversityStats {
-    todo!("taxonomy phase 5: calculate_diversity")
+pub fn calculate_diversity(species_subset: &[Species]) -> DiversityStats {
+    diversity::calculate_diversity(species_subset)
 }
 
 /// Generate the full taxonomy exploration report.
