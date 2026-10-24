@@ -111,7 +111,7 @@ pub struct Publication {
 }
 
 /// Filter criteria for querying publications.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct PublicationQuery {
     /// Free-text filter.
     pub text: Option<String>,
@@ -147,7 +147,7 @@ pub struct CoverageRecord {
 }
 
 /// Criteria and thresholds for a knowledge exploration.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct KnowledgeQuery {
     /// Free-text filter.
     pub text: Option<String>,
@@ -165,8 +165,18 @@ pub struct KnowledgeQuery {
     pub year_to: Option<u16>,
     /// Source type filter.
     pub source_type: Option<SourceType>,
-    /// Understudied threshold for species coverage.
+    /// Maximum publication count for an understudied species (inclusive).
+    /// Defaults to `1` when omitted.
     pub understudied_threshold: Option<usize>,
+}
+
+/// Combined input for the full knowledge exploration pipeline (§9).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct KnowledgeInput {
+    /// Raw JSON publication dataset or fixture content.
+    pub raw_publications: String,
+    /// Exploration query filter criteria.
+    pub query: KnowledgeQuery,
 }
 
 /// Node kind in the knowledge network.
@@ -215,6 +225,9 @@ pub struct KnowledgeNetwork {
     pub edges: Vec<KnowledgeEdge>,
 }
 
+/// Alias for `KnowledgeNetwork` to match the planning specification.
+pub type KnowledgeGraph = KnowledgeNetwork;
+
 /// Full knowledge exploration report.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct KnowledgeReport {
@@ -222,8 +235,14 @@ pub struct KnowledgeReport {
     pub ranked_publications: Vec<Publication>,
     /// Research output timeline per year.
     pub timeline: std::collections::BTreeMap<u16, usize>,
+    /// Publication counts by research topic.
+    pub topic_distribution: std::collections::BTreeMap<String, usize>,
+    /// Publication counts by study location name.
+    pub location_distribution: std::collections::BTreeMap<String, usize>,
     /// Entity coverage records.
     pub coverage: Vec<CoverageRecord>,
+    /// Fraction of scoped species that have at least one publication.
+    pub coverage_score: f64,
     /// Understudied species identifiers.
     pub understudied_species: Vec<u64>,
     /// The knowledge network.
@@ -231,7 +250,7 @@ pub struct KnowledgeReport {
 }
 
 /// Citation export format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum CitationFormat {
     /// APA style.
     Apa,
@@ -251,3 +270,22 @@ pub enum ModuleError {
     /// A requested entity was not found.
     NotFound(String),
 }
+
+impl std::fmt::Display for ModuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parse(message) => write!(f, "Parse error: {message}"),
+            Self::Validation(message) => write!(f, "Validation error: {message}"),
+            Self::Empty(message) => write!(f, "Empty dataset error: {message}"),
+            Self::NotFound(message) => write!(f, "Not found error: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ModuleError {}
+
+/// Alias for parsing error variants, mapped to [`ModuleError`].
+pub type ParseError = ModuleError;
+
+/// Alias for pipeline execution error variants, mapped to [`ModuleError`].
+pub type PipelineError = ModuleError;

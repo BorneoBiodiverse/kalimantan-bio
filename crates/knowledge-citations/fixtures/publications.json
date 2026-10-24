@@ -1,0 +1,133 @@
+[
+  {
+    "id": "pub-001",
+    "title": "Population dynamics and habitat suitability of Pongo pygmaeus in Gunung Palung National Park",
+    "abstract_text": "We investigated the spatial ecology and population density of Bornean orangutans (Pongo pygmaeus) across fragmented peat swamp and lowland dipterocarp forests in West Kalimantan.",
+    "publication_year": 2021,
+    "authors": [
+      {
+        "id": "auth-01",
+        "name": "Budi Santoso",
+        "affiliation": "Universitas Tanjungpura"
+      },
+      {
+        "id": "auth-02",
+        "name": "Cheryl Knott",
+        "affiliation": "Boston University"
+      }
+    ],
+    "venue": "Borneo Journal of Biodiversity",
+    "doi": "10.1016/j.bjb.2021.04.012",
+    "url": "https://doi.org/10.1016/j.bjb.2021.04.012",
+    "source_type": "JournalArticle",
+    "species_ids": [1],
+    "taxon_names": ["Pongo", "Hominidae", "Primates"],
+    "topics": ["Ecology", "Conservation", "Habitat"],
+    "locations": [
+      {
+        "name": "Gunung Palung",
+        "province": "Kalimantan Barat",
+        "regency": "Kayong Utara",
+        "location_type": "ConservationArea"
+      }
+    ],
+    "citation_count": 15
+  },
+  {
+    "id": "pub-002",
+    "title": "Camera trap survey of Neofelis diardi in Bukit Baka Bukit Raya National Park",
+    "abstract_text": "A systematic camera-trapping survey was conducted to estimate relative abundance and activity patterns of the Sunda clouded leopard (Neofelis diardi) in central Borneo.",
+    "publication_year": 2022,
+    "authors": [
+      {
+        "id": "auth-03",
+        "name": "Siti Rahmawati",
+        "affiliation": "Balai Taman Nasional Bukit Baka Bukit Raya"
+      },
+      {
+        "id": "auth-01",
+        "name": "Budi Santoso",
+        "affiliation": "Universitas Tanjungpura"
+      }
+    ],
+    "venue": "Journal of Tropical Forest Science",
+    "doi": "10.21894/jtfs.2022.08.005",
+    "url": "https://doi.org/10.21894/jtfs.2022.08.005",
+    "source_type": "JournalArticle",
+    "species_ids": [4],
+    "taxon_names": ["Neofelis", "Felidae", "Carnivora"],
+    "topics": ["Conservation", "SpeciesIdentification"],
+    "locations": [
+      {
+        "name": "Bukit Baka Bukit Raya",
+        "province": "Kalimantan Barat",
+        "regency": "Melawi",
+        "location_type": "ConservationArea"
+      }
+    ],
+    "citation_count": 8
+  },
+  {
+    "id": "pub-003",
+    "title": "Ecology and host vine specificity of Rafflesia arnoldii in Kayan Mentarang",
+    "abstract_text": "Study of the parasitic relationship and distribution of Rafflesia arnoldii on Tetrastigma hosts in North Kalimantan rainforests.",
+    "publication_year": 2023,
+    "authors": [
+      {
+        "id": "auth-04",
+        "name": "Agus Susanto",
+        "affiliation": "Badan Riset dan Inovasi Nasional"
+      }
+    ],
+    "venue": "Flora Malesiana Bulletin",
+    "doi": "10.1163/fmb.2023.11.002",
+    "url": "https://doi.org/10.1163/fmb.2023.11.002",
+    "source_type": "JournalArticle",
+    "species_ids": [5],
+    "taxon_names": ["Rafflesia", "Rafflesiaceae", "Tetrastigma"],
+    "topics": ["Taxonomy", "Ecology", "Ethnobotany"],
+    "locations": [
+      {
+        "name": "Kayan Mentarang",
+        "province": "Kalimantan Utara",
+        "regency": "Malinau",
+        "location_type": "ConservationArea"
+      }
+    ],
+    "citation_count": 4
+  },
+  {
+    "id": "pub-004",
+    "title": "Community-based conservation and nesting behaviour of Pongo pygmaeus in Danau Sentarum",
+    "abstract_text": "Investigating nesting patterns of Pongo pygmaeus and indigenous Dayak conservation practices in Danau Sentarum National Park wetland complex.",
+    "publication_year": 2024,
+    "authors": [
+      {
+        "id": "auth-01",
+        "name": "Budi Santoso",
+        "affiliation": "Universitas Tanjungpura"
+      },
+      {
+        "id": "auth-05",
+        "name": "Dewi Lestari",
+        "affiliation": "Universitas Gadjah Mada"
+      }
+    ],
+    "venue": "Conservation Biology in Wallacea & Sundaland",
+    "doi": "10.1007/cbws.2024.01.003",
+    "url": "https://doi.org/10.1007/cbws.2024.01.003",
+    "source_type": "JournalArticle",
+    "species_ids": [1],
+    "taxon_names": ["Pongo", "Hominidae"],
+    "topics": ["Conservation", "Ecology", "Ethnobotany"],
+    "locations": [
+      {
+        "name": "Danau Sentarum",
+        "province": "Kalimantan Barat",
+        "regency": "Kapuas Hulu",
+        "location_type": "ConservationArea"
+      }
+    ],
+    "citation_count": 2
+  }
+]

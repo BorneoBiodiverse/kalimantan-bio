@@ -1,8 +1,11 @@
 //! Module 5 routes — Biodiversity Knowledge & Citation Explorer.
 
 use axum::extract::Query;
+use axum::http::StatusCode;
 use axum::response::Json;
-use knowledge_citations::types::{CitationFormat, KnowledgeQuery, Publication};
+use knowledge_citations::types::{
+    CitationFormat, KnowledgeQuery, ModuleError, Publication, ResearchTopic,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -35,15 +38,41 @@ pub struct CitationParams {
 /// # Returns
 ///
 /// A JSON response with the knowledge exploration report.
-pub async fn get_publications(Query(params): Query<PublicationParams>) -> Json<Value> {
+pub async fn get_publications(
+    Query(params): Query<PublicationParams>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let query = KnowledgeQuery {
         species_ids: params.species_id.map(|id| vec![id]).unwrap_or_default(),
-        text: params.topic,
+        topic: params
+            .topic
+            .map(|topic| match topic.to_lowercase().as_str() {
+                "taxonomy" => ResearchTopic::Taxonomy,
+                "ecology" => ResearchTopic::Ecology,
+                "conservation" => ResearchTopic::Conservation,
+                "ethnobotany" => ResearchTopic::Ethnobotany,
+                "habitat" => ResearchTopic::Habitat,
+                "speciesidentification" | "species identification" => {
+                    ResearchTopic::SpeciesIdentification
+                }
+                _ => ResearchTopic::Other(topic),
+            }),
         ..Default::default()
     };
-    let publications: Vec<Publication> = Vec::new();
-    let report = knowledge_citations::explore_knowledge(&query, &publications);
-    Json(json!({ "status": "success", "data": report }))
+    let raw = include_str!("../../../knowledge-citations/fixtures/publications.json");
+    let publications: Vec<Publication> =
+        knowledge_citations::parse_publications(raw).unwrap_or_default();
+    match knowledge_citations::explore_knowledge(&query, &publications) {
+        Ok(report) => Ok(Json(json!({ "status": "success", "data": report }))),
+        Err(error) => {
+            let (status, message) = match error {
+                ModuleError::Parse(message) => (StatusCode::UNPROCESSABLE_ENTITY, message),
+                ModuleError::Validation(message) => (StatusCode::BAD_REQUEST, message),
+                ModuleError::Empty(message) => (StatusCode::SERVICE_UNAVAILABLE, message),
+                ModuleError::NotFound(message) => (StatusCode::NOT_FOUND, message),
+            };
+            Err((status, Json(json!({ "status": "error", "error": message }))))
+        }
+    }
 }
 
 /// `GET /api/v1/citations`
@@ -59,7 +88,19 @@ pub async fn get_publications(Query(params): Query<PublicationParams>) -> Json<V
 ///
 /// A JSON response with exported citations.
 pub async fn export_citations(Query(params): Query<CitationParams>) -> Json<Value> {
-    let publications: Vec<Publication> = Vec::new();
+    let raw = include_str!("../../../knowledge-citations/fixtures/publications.json");
+    let all_publications =
+        knowledge_citations::parse_publications(raw).unwrap_or_default();
+    let publications: Vec<Publication> = if let Some(ref ids_str) = params.publication_ids {
+        let requested_ids: std::collections::HashSet<&str> =
+            ids_str.split(',').map(str::trim).collect();
+        all_publications
+            .into_iter()
+            .filter(|p| requested_ids.contains(p.id.as_str()))
+            .collect()
+    } else {
+        all_publications
+    };
     let format = match params.format.as_deref() {
         Some("bibtex") => CitationFormat::Bibtex,
         _ => CitationFormat::Apa,
