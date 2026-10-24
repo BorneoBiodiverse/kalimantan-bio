@@ -76,7 +76,9 @@ pub fn normalize_score(score: f64, min: f64, max: f64) -> f64 {
 /// let ranked = rank_by_score(vec![("a", 0.5), ("b", 0.9)]);
 /// ```
 pub fn rank_by_score<T>(items: Vec<(T, f64)>) -> Vec<(T, f64)> {
-    todo!("shared scoring phase 3: rank_by_score")
+    let mut ranked = items;
+    ranked.sort_by(|left, right| right.1.total_cmp(&left.1));
+    ranked
 }
 
 /// Keep the top N items by score.
@@ -102,7 +104,9 @@ pub fn rank_by_score<T>(items: Vec<(T, f64)>) -> Vec<(T, f64)> {
 /// let top = top_n(vec![("a", 0.5), ("b", 0.9)], 1);
 /// ```
 pub fn top_n<T>(items: Vec<(T, f64)>, n: usize) -> Vec<(T, f64)> {
-    todo!("shared scoring phase 3: top_n")
+    let mut ranked = rank_by_score(items);
+    ranked.truncate(n);
+    ranked
 }
 
 /// Filter items by a minimum score threshold (inclusive).
@@ -127,5 +131,8 @@ pub fn top_n<T>(items: Vec<(T, f64)>, n: usize) -> Vec<(T, f64)> {
 /// let kept = filter_by_threshold(vec![("a", 0.5), ("b", 0.9)], 0.7);
 /// ```
 pub fn filter_by_threshold<T>(items: Vec<(T, f64)>, min_score: f64) -> Vec<(T, f64)> {
-    todo!("shared scoring phase 3: filter_by_threshold")
+    items
+        .into_iter()
+        .filter(|(_, score)| score.is_finite() && *score >= min_score)
+        .collect()
 }

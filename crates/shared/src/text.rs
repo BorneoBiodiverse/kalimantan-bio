@@ -23,7 +23,11 @@
 /// // Returns: "orangutan kalimantan"
 /// ```
 pub fn normalize_text(input: &str) -> String {
-    todo!("shared text phase 3: normalize_text")
+    input
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 /// Sanitize a label: trim and remove extra spaces.
