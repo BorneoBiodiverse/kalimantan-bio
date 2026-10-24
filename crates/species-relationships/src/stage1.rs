@@ -56,6 +56,18 @@ pub(crate) fn normalize_species(species: &Species) -> Species {
             genus: normalize_label(&species.taxonomy.genus),
             genus_id: species.taxonomy.genus_id,
         },
+        habitats: species
+            .habitats
+            .iter()
+            .map(|h| normalize_label(h))
+            .filter(|h| !h.is_empty())
+            .collect(),
+        characteristics: species
+            .characteristics
+            .iter()
+            .map(|c| normalize_label(c))
+            .filter(|c| !c.is_empty())
+            .collect(),
         observation_count: species.observation_count,
         recorded_individuals_total: species.recorded_individuals_total,
         latest_observation_year: species.latest_observation_year,
@@ -145,9 +157,7 @@ pub(crate) fn validate_query(query: &RelationshipQuery) -> Result<(), ExplorerEr
 pub(crate) fn validate_weights(weights: &ScoreWeights) -> Result<(), ExplorerError> {
     let weights_slice = [weights.taxonomy, weights.habitat, weights.characteristic];
 
-    let all_valid = weights_slice
-        .iter()
-        .all(|&w| w.is_finite() && w >= 0.0);
+    let all_valid = weights_slice.iter().all(|&w| w.is_finite() && w >= 0.0);
 
     if !all_valid {
         return Err(ExplorerError::InvalidWeights);
@@ -164,10 +174,7 @@ pub(crate) fn validate_weights(weights: &ScoreWeights) -> Result<(), ExplorerErr
 /// Mencari referensi spesies pusat berdasarkan ID pada snapshot dataset.
 ///
 /// Menghasilkan `Ok(&Species)` jika ditemukan, atau `Err(ExplorerError::SpeciesNotFound)` jika tidak ada.
-pub(crate) fn find_species(
-    species: &[Species],
-    id: SpeciesId,
-) -> Result<&Species, ExplorerError> {
+pub(crate) fn find_species(species: &[Species], id: SpeciesId) -> Result<&Species, ExplorerError> {
     species
         .iter()
         .find(|s| s.id == id)
@@ -208,6 +215,8 @@ mod tests {
             is_verified: true,
             image_url: None,
             taxonomy: sample_taxonomy(),
+            habitats: HashSet::new(),
+            characteristics: HashSet::new(),
             observation_count: 10,
             recorded_individuals_total: 25,
             latest_observation_year: Some(2023),
@@ -218,7 +227,14 @@ mod tests {
 
     #[test]
     fn test_normalize_species() {
-        let sp = sample_species(1, "   Shorea    leprosula   ");
+        let mut sp = sample_species(1, "   Shorea    leprosula   ");
+        sp.habitats = HashSet::from([
+            "  Wetland  ".to_string(),
+            "LOWLAND".to_string(),
+            "   ".to_string(),
+        ]);
+        sp.characteristics = HashSet::from(["  Woody  ".to_string(), "EVERGREEN".to_string()]);
+
         let norm = normalize_species(&sp);
 
         // ID tidak berubah
@@ -235,6 +251,13 @@ mod tests {
         assert_eq!(norm.taxonomy.genus, "shorea");
         assert_eq!(norm.taxonomy.family, "dipterocarpaceae");
         assert_eq!(norm.taxonomy.order, "malvales");
+        // Habitat dan karakteristik dinormalisasi ke huruf kecil & spasi dibersihkan
+        assert!(norm.habitats.contains("wetland"));
+        assert!(norm.habitats.contains("lowland"));
+        assert_eq!(norm.habitats.len(), 2);
+        assert!(norm.characteristics.contains("woody"));
+        assert!(norm.characteristics.contains("evergreen"));
+        assert_eq!(norm.characteristics.len(), 2);
     }
 
     #[test]
@@ -301,7 +324,10 @@ mod tests {
             limit: 10,
             required_basis: None,
         };
-        assert!(matches!(validate_query(&query), Err(ExplorerError::InvalidQuery(_))));
+        assert!(matches!(
+            validate_query(&query),
+            Err(ExplorerError::InvalidQuery(_))
+        ));
     }
 
     #[test]
@@ -313,7 +339,10 @@ mod tests {
             limit: 10,
             required_basis: None,
         };
-        assert!(matches!(validate_query(&q_neg), Err(ExplorerError::InvalidQuery(_))));
+        assert!(matches!(
+            validate_query(&q_neg),
+            Err(ExplorerError::InvalidQuery(_))
+        ));
 
         // Di atas 1.0
         let q_high = RelationshipQuery {
@@ -322,7 +351,10 @@ mod tests {
             limit: 10,
             required_basis: None,
         };
-        assert!(matches!(validate_query(&q_high), Err(ExplorerError::InvalidQuery(_))));
+        assert!(matches!(
+            validate_query(&q_high),
+            Err(ExplorerError::InvalidQuery(_))
+        ));
 
         // NaN
         let q_nan = RelationshipQuery {
@@ -331,7 +363,10 @@ mod tests {
             limit: 10,
             required_basis: None,
         };
-        assert!(matches!(validate_query(&q_nan), Err(ExplorerError::InvalidQuery(_))));
+        assert!(matches!(
+            validate_query(&q_nan),
+            Err(ExplorerError::InvalidQuery(_))
+        ));
     }
 
     #[test]
@@ -342,7 +377,10 @@ mod tests {
             limit: 0,
             required_basis: None,
         };
-        assert!(matches!(validate_query(&q_zero), Err(ExplorerError::InvalidQuery(_))));
+        assert!(matches!(
+            validate_query(&q_zero),
+            Err(ExplorerError::InvalidQuery(_))
+        ));
 
         let q_over = RelationshipQuery {
             species_id: 1,
@@ -350,7 +388,10 @@ mod tests {
             limit: 51,
             required_basis: None,
         };
-        assert!(matches!(validate_query(&q_over), Err(ExplorerError::InvalidQuery(_))));
+        assert!(matches!(
+            validate_query(&q_over),
+            Err(ExplorerError::InvalidQuery(_))
+        ));
     }
 
     #[test]
@@ -370,7 +411,10 @@ mod tests {
             habitat: 0.60,
             characteristic: 0.50,
         };
-        assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
+        assert_eq!(
+            validate_weights(&weights),
+            Err(ExplorerError::InvalidWeights)
+        );
     }
 
     #[test]
@@ -380,7 +424,10 @@ mod tests {
             habitat: 0.50,
             characteristic: 0.50,
         };
-        assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
+        assert_eq!(
+            validate_weights(&weights),
+            Err(ExplorerError::InvalidWeights)
+        );
     }
 
     #[test]
@@ -390,7 +437,10 @@ mod tests {
             habitat: 0.30,
             characteristic: 0.30, // Total 1.10
         };
-        assert_eq!(validate_weights(&weights), Err(ExplorerError::InvalidWeights));
+        assert_eq!(
+            validate_weights(&weights),
+            Err(ExplorerError::InvalidWeights)
+        );
     }
 
     #[test]
