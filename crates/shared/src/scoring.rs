@@ -79,8 +79,9 @@ pub fn normalize_score(score: f64, min: f64, max: f64) -> f64 {
 /// ```rust,ignore
 /// let ranked = rank_by_score(vec![("a", 0.5), ("b", 0.9)]);
 /// ```
-pub fn rank_by_score<T>(items: Vec<(T, f64)>) -> Vec<(T, f64)> {
-    todo!("shared scoring phase 3: rank_by_score")
+pub fn rank_by_score<T>(mut items: Vec<(T, f64)>) -> Vec<(T, f64)> {
+    items.sort_by(|left, right| right.1.total_cmp(&left.1));
+    items
 }
 
 /// Keep the top N items by score.
