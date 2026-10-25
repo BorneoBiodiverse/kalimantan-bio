@@ -246,6 +246,8 @@ mod tests {
             is_verified: true,
             image_url: None,
             taxonomy: taxonomy(1, 3),
+            habitats: Default::default(),
+            characteristics: Default::default(),
             observation_count: 2,
             recorded_individuals_total: 7,
             latest_observation_year: Some(2025),

@@ -468,6 +468,8 @@ mod tests {
                 genus: genus.into(),
                 genus_id: 6,
             },
+            habitats: Default::default(),
+            characteristics: Default::default(),
             observation_count: 1,
             recorded_individuals_total: 1,
             latest_observation_year: None,
