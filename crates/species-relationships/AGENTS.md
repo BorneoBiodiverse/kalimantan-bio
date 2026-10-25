@@ -52,12 +52,17 @@ use kalimantanbio_shared::{
 };
 ```
 
+`Species` provides canonical `habitats` and `characteristics` collections
+(`HashSet<String>`, empty set = data unavailable). Stage 2 reads them through
+`collect_evidence`; the public pair API accepts normalized habitat labels as
+explicit arguments.
+
 ---
 
 ## Internal (Private) Functions — Not Exported (§17.3)
 
 - `normalize_species`, `prepare_species`, `validate_query`, `validate_weights`, `find_species`
-- `taxonomy_evidence`, `set_evidence`, `collect_evidence`
+- `taxonomy_evidence`, `set_evidence`, `collect_evidence`, `score_evidence`
 - `candidate_species`, `explain_relationship`, `score_candidates`, `rank_related`
 - `make_node`, `make_edge`, `build_network`, `assemble_result`
 
