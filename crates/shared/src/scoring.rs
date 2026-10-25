@@ -25,7 +25,7 @@
 /// let combined = combine_weighted_scores(&[(0.8, 0.6), (0.5, 0.4)]);
 /// ```
 pub fn combine_weighted_scores(scores: &[(f64, f64)]) -> f64 {
-    scores.iter().map(|(score,weight)| score * weight).sum()
+    scores.iter().map(|(score, weight)| score * weight).sum()
 }
 
 /// Normalize a score into the inclusive range `[min, max]`.
