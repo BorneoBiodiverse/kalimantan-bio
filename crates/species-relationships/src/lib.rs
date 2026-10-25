@@ -10,6 +10,7 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub(crate) mod stage1;
 pub mod types;
 
 pub(crate) mod stage4;
@@ -18,8 +19,9 @@ use std::collections::HashSet;
 
 use kalimantanbio_shared::{core::Species, error::ValidationError};
 
-use crate::types::{ExplorerError, ExplorerResult, RelationshipQuery, RelationshipScore,
-    ScoreWeights};
+use crate::types::{
+    ExplorerError, ExplorerResult, RelationshipQuery, RelationshipScore, ScoreWeights,
+};
 
 pub use crate::types::SpeciesId;
 
