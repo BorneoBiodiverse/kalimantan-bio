@@ -324,7 +324,6 @@ mod tests {
     // `todo!()` stub in `kalimantanbio-shared`. Remove `#[ignore]` once it is implemented.
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::combine_weighted_scores implemented"]
     fn species_perfect_match_scores_one_even_with_few_criteria() {
         // Only text is used -> weights are re-normalized, so a perfect match is 1.0, not 0.5.
         let score = score_species(&orangutan(), &with_text(&["orangutan"]), &ScoringWeights::default());
@@ -332,7 +331,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::combine_weighted_scores implemented"]
     fn species_combines_components_with_renormalized_weights() {
         // text (0.5) + conservation (0.2) active -> 5/7 and 2/7.
         // text = 0.4 (description only), conservation = 1.0.
@@ -347,7 +345,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::combine_weighted_scores implemented"]
     fn species_empty_query_scores_zero_and_stays_in_range() {
         assert_eq!(score_species(&orangutan(), &QueryFilters::default(), &ScoringWeights::default()), 0.0);
         let full = QueryFilters {

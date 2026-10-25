@@ -650,7 +650,6 @@ mod tests {
     // Remove `#[ignore]` once they are implemented.
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::combine_weighted_scores implemented"]
     fn identical_candidate_scores_one() {
         let filters = QueryFilters {
             free_text: vec!["orangutan".into()],
@@ -662,7 +661,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::combine_weighted_scores implemented"]
     fn candidate_that_keeps_the_intent_scores_higher() {
         let filters = QueryFilters {
             free_text: vec!["orangutan".into()],
@@ -676,7 +674,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::combine_weighted_scores implemented"]
     fn candidate_contradicting_an_active_filter_loses_attribute_weight() {
         let filters = QueryFilters {
             iucn: Some("CR".into()),
@@ -690,7 +687,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs kalimantanbio_shared::scoring::rank_by_score implemented"]
     fn ranking_orders_candidates_by_relevance() {
         let filters = QueryFilters {
             free_text: vec!["orangutan".into()],

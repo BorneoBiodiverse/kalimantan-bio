@@ -18,7 +18,6 @@ fn load_species_fixtures() -> Vec<Species> {
 }
 
 #[test]
-#[ignore = "Menunggu implementasi logika dari tim"]
 fn test_search_by_common_name_orangutan() {
     let all_species = load_species_fixtures();
     let results = species_search::search("orangutan", &all_species);
@@ -31,7 +30,6 @@ fn test_search_by_common_name_orangutan() {
 }
 
 #[test]
-#[ignore = "Menunggu implementasi logika dari tim"]
 fn test_search_by_iucn_conservation_status() {
     let all_species = load_species_fixtures();
     let results = species_search::search("iucn:CR", &all_species);
@@ -43,7 +41,6 @@ fn test_search_by_iucn_conservation_status() {
 }
 
 #[test]
-#[ignore = "Menunggu implementasi logika dari tim"]
 fn test_search_unknown_keyword_returns_empty() {
     let all_species = load_species_fixtures();
     let results = species_search::search("hewan_tidak_ada_xyz_123", &all_species);
@@ -52,10 +49,39 @@ fn test_search_unknown_keyword_returns_empty() {
 }
 
 #[test]
-#[ignore = "Menunggu implementasi logika dari tim"]
 fn test_recommend_related_queries() {
     let all_species = load_species_fixtures();
     let suggestions = species_search::recommend_related_queries("orangutan", &all_species);
 
     assert!(!suggestions.is_empty(), "Harus menghasilkan minimal satu saran query");
 }
+
+#[test]
+fn test_normal_matching_query_completes_without_panic() {
+    let all_species = load_species_fixtures();
+    
+    // Uji alur pencarian normal end-to-end (parse -> filter -> score -> rank)
+    let results = species_search::search("orangutan kalimantan", &all_species);
+
+    assert!(
+        !results.is_empty(),
+        "Pencarian query normal harus berhasil menemukan spesies"
+    );
+
+    // Buktikan setiap hasil memiliki skor valid dalam rentang (0.0, 1.0]
+    for (species, score) in &results {
+        assert!(
+            *score > 0.0 && *score <= 1.0,
+            "Skor relevansi untuk {} harus valid, didapat: {}",
+            species.common_name,
+            score
+        );
+    }
+
+    // Pastikan terurut menurun (descending) sesuai skor tertinggi
+    assert!(
+        results.windows(2).all(|pair| pair[0].1 >= pair[1].1),
+        "Hasil harus terurut descending berdasarkan skor relevansi"
+    );
+}
+
