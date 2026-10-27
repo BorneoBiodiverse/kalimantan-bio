@@ -212,7 +212,16 @@ pub fn rank_taxon_richness(
     });
 
     let mut distribution = frequency_distribution(species, |species| species.taxonomy.family_id);
-    distribution.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    // Urutkan: jumlah spesies terbanyak dulu; jika sama, nama famili (A-Z); jika nama
+    // juga sama, ID famili agar hasil tetap deterministik.
+    distribution.sort_by(|a, b| {
+        let name_a = family_meta.get(&a.0).map(|family| family.name.as_str());
+        let name_b = family_meta.get(&b.0).map(|family| family.name.as_str());
+
+        b.1.cmp(&a.1)
+            .then_with(|| name_a.cmp(&name_b))
+            .then_with(|| a.0.cmp(&b.0))
+    });
 
     distribution
         .into_iter()
@@ -385,16 +394,23 @@ mod tests {
 
     #[test]
     fn test_rank_taxon_richness_ties_are_sorted_by_name() {
+
+        // ID famili sengaja dibuat berlawanan dengan urutan abjad:
+        // "Zingiberaceae" (ID 5) < "Lauraceae" (ID 20) jika diurutkan menurut ID.
+        const ZINGIBERACEAE: u64 = 5;
+        const ALPINIA: u64 = 300;
+
         let species = vec![
-            sample_species(1, LAURACEAE, "Lauraceae", LITSEA, "Litsea", "Native"),
-            sample_species(2, DIPTEROCARPACEAE, "Dipterocarpaceae", SHOREA, "Shorea", "Native"),
+            sample_species(1, ZINGIBERACEAE, "Zingiberaceae", ALPINIA, "Alpinia", "Native"),
+            sample_species(2, LAURACEAE, "Lauraceae", LITSEA, "Litsea", "Native"),
         ];
+        
         let map: HashMap<TaxonId, Vec<TaxonId>> = HashMap::new();
 
         let rank = rank_taxon_richness(&map, &species);
 
         let names: Vec<&str> = rank.iter().map(|(taxon, _)| taxon.name.as_str()).collect();
-        assert_eq!(names, vec!["Dipterocarpaceae", "Lauraceae"]);
+        assert_eq!(names, vec!["Lauraceae", "Zingiberaceae"]);
         assert!(rank.iter().all(|(taxon, _)| taxon.parent_id.is_none()));
     }
 
