@@ -189,9 +189,15 @@ pub fn analyze_taxonomic_gap(
     our_genera: &HashSet<String>,
     reference_genera: &HashSet<String>,
 ) -> GapReport {
-    let missing = find_missing_taxa(reference_genera, our_genera);
-    let covered_count = reference_genera.len().saturating_sub(missing.len());
-    let score = calculate_coverage_score(covered_count, reference_genera.len());
+    let reference: HashSet<String> = reference_genera
+        .iter()
+        .map(|genus| genus.trim().to_string())
+        .filter(|genus| !genus.is_empty())
+        .collect();
+
+    let missing = find_missing_taxa(&reference, our_genera);
+    let covered_count = reference.len().saturating_sub(missing.len());
+    let score = calculate_coverage_score(covered_count, reference.len());
     generate_gap_report(&missing, score)
 }
 
@@ -457,5 +463,19 @@ mod tests {
             vec!["Hopea".to_string(), "Vatica".to_string()]
         );
         assert!((report.coverage_score - (1.0 / 3.0)).abs() < 1e-6);
+    }
+
+        #[test]
+    fn test_analyze_taxonomic_gap_sanitizes_reference_genera() {
+        let our_genera: HashSet<String> = ["Shorea"].into_iter().map(String::from).collect();
+        let reference: HashSet<String> = ["Shorea", " Vatica ", "", "   "]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let report = analyze_taxonomic_gap(&our_genera, &reference);
+
+        assert_eq!(report.missing_taxa, vec!["Vatica".to_string()]);
+        assert!((report.coverage_score - 0.5).abs() < f64::EPSILON);
     }
 }
