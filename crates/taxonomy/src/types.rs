@@ -44,6 +44,10 @@ pub struct RawSpeciesRecord {
     pub scientific_name: String,
     /// Genus identifier the species belongs to.
     pub genus_id: TaxonId,
+    /// Species type as stored in the source data (for example `"Endemic"`).
+    ///
+    /// Required to classify endemic taxa; it is never defaulted during parsing.
+    pub species_type: String,
 }
 
 /// Diversity statistics of a dataset.

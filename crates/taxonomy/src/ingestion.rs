@@ -56,6 +56,13 @@ pub fn parse_taxons(raw: &[RawTaxonRecord]) -> Result<Vec<Taxon>, PipelineError>
         ));
     }
 
+        let has_empty_type = raw.iter().any(|r| r.species_type.trim().is_empty());
+    if has_empty_type {
+        return Err(PipelineError::Validation(
+            "Species record contains an empty or whitespace-only species type".to_string(),
+        ));
+    }
+
     // Functional duplicate detection using fold and HashSet
     let (has_duplicate_id, _) = raw
         .iter()
@@ -156,11 +163,14 @@ pub fn parse_species(raw: &[RawSpeciesRecord]) -> Result<Vec<RawSpeciesRecord>, 
             id: r.id,
             scientific_name: r.scientific_name.trim().to_string(),
             genus_id: r.genus_id,
+            species_type: r.species_type.trim().to_string(),
         })
         .collect();
 
     Ok(species)
 }
+
+
 
 /// Validates hierarchical integrity of a collection of `Taxon` nodes.
 ///
@@ -453,5 +463,31 @@ mod tests {
     fn test_validate_hierarchy_empty() {
         let taxons = vec![];
         assert!(validate_hierarchy(&taxons));
+    }
+
+    #[test]
+    fn test_parse_species_trims_species_type() {
+        let raw = vec![RawSpeciesRecord {
+            id: 1,
+            scientific_name: "Shorea leprosula".to_string(),
+            genus_id: TaxonId(10),
+            species_type: "  Endemic ".to_string(),
+        }];
+
+        let species = parse_species(&raw).unwrap();
+        assert_eq!(species[0].species_type, "Endemic");
+    }
+
+    #[test]
+    fn test_parse_species_empty_species_type() {
+        let raw = vec![RawSpeciesRecord {
+            id: 1,
+            scientific_name: "Shorea leprosula".to_string(),
+            genus_id: TaxonId(10),
+            species_type: "   ".to_string(),
+        }];
+
+        let result = parse_species(&raw);
+        assert!(matches!(result, Err(PipelineError::Validation(_))));
     }
 }
