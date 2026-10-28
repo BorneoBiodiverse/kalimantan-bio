@@ -1,12 +1,13 @@
+//! Module 3 Tahap 2 — Taxonomic Tree Construction.
+//!
+//! Builds the parent-to-children map, lineage traversal, and subtree species collection.
 
-use std::collections::{HashMap, HashSet};
-use kalimantanbio_shared::core::Species;
 use crate::types::{Taxon, TaxonId};
+use kalimantanbio_shared::core::Species;
+use std::collections::{HashMap, HashSet};
 
 /// Membuat peta yang menghubungkan ID induk dengan ID anak-anaknya.
-pub fn build_taxonomy_map(
-    taxons: &[Taxon],
-) -> HashMap<TaxonId, Vec<TaxonId>> {
+pub fn build_taxonomy_map(taxons: &[Taxon]) -> HashMap<TaxonId, Vec<TaxonId>> {
     taxons.iter().fold(
         HashMap::new(),
         |mut taxonomy_map: HashMap<TaxonId, Vec<TaxonId>>, taxon| {
@@ -22,11 +23,7 @@ pub fn build_taxonomy_map(
 ///
 /// Penelusuran berhenti jika bertemu node yang sudah dikunjungi, sehingga data
 /// dengan siklus induk tidak membuat fungsi ini berputar tanpa henti.
-
-pub fn get_lineage(
-    taxon_id: &TaxonId,
-    map: &HashMap<TaxonId, Taxon>,
-) -> Vec<Taxon> {
+pub fn get_lineage(taxon_id: &TaxonId, map: &HashMap<TaxonId, Taxon>) -> Vec<Taxon> {
     let mut lineage = Vec::new();
     let mut visited: HashSet<TaxonId> = HashSet::new();
     let mut current_id = Some(*taxon_id);
@@ -35,6 +32,7 @@ pub fn get_lineage(
         if !visited.insert(id) {
             break;
         }
+
         match map.get(&id) {
             Some(taxon) => {
                 lineage.push(taxon.clone());
@@ -70,9 +68,7 @@ pub fn get_subtree_species(
     // Ambil spesies yang genus-nya berada di dalam subtree.
     species
         .iter()
-        .filter(|sp| {
-            descendant_ids.contains(&TaxonId(sp.taxonomy.genus_id))
-        })
+        .filter(|sp| descendant_ids.contains(&TaxonId(sp.taxonomy.genus_id)))
         .cloned()
         .collect()
 }
@@ -112,10 +108,7 @@ mod tests {
 
         let result = build_taxonomy_map(&taxons);
 
-        assert_eq!(
-            result.get(&TaxonId(2)),
-            Some(&vec![TaxonId(3), TaxonId(4)])
-        );
+        assert_eq!(result.get(&TaxonId(2)), Some(&vec![TaxonId(3), TaxonId(4)]));
 
         assert_eq!(result.len(), 1);
     }
@@ -143,26 +136,18 @@ mod tests {
             },
         ];
 
-        let map: HashMap<TaxonId, Taxon> = taxons
-            .into_iter()
-            .map(|taxon| (taxon.id, taxon))
-            .collect();
+        let map: HashMap<TaxonId, Taxon> =
+            taxons.into_iter().map(|taxon| (taxon.id, taxon)).collect();
 
         let lineage = get_lineage(&TaxonId(3), &map);
 
-        let names: Vec<&str> = lineage
-            .iter()
-            .map(|taxon| taxon.name.as_str())
-            .collect();
+        let names: Vec<&str> = lineage.iter().map(|taxon| taxon.name.as_str()).collect();
 
-        assert_eq!(
-            names,
-            vec!["Shorea", "Dipterocarpaceae", "Plantae"]
-        );
+        assert_eq!(names, vec!["Shorea", "Dipterocarpaceae", "Plantae"]);
 
         assert!(get_lineage(&TaxonId(999), &map).is_empty());
     }
-    
+
     #[test]
     fn test_extract_our_genera() {
         let taxa = vec![
@@ -184,6 +169,15 @@ mod tests {
                 rank: TaxonomicRank::Genus,
                 parent_id: Some(TaxonId(1)),
             },
+        ];
+
+        let result = extract_our_genera(&taxa);
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains("Shorea"));
+        assert!(result.contains("Hopea"));
+        assert!(!result.contains("Dipterocarpaceae"));
+    }
 
     #[test]
     fn test_get_lineage_stops_on_cycle() {
@@ -208,14 +202,5 @@ mod tests {
         let lineage = get_lineage(&TaxonId(2), &map);
 
         assert_eq!(lineage.len(), 2);
-            }
-        ];
-
-        let result = extract_our_genera(&taxa);
-
-        assert_eq!(result.len(), 2);
-        assert!(result.contains("Shorea"));
-        assert!(result.contains("Hopea"));
-        assert!(!result.contains("Dipterocarpaceae"));
     }
 }

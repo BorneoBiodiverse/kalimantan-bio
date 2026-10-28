@@ -201,15 +201,17 @@ pub fn rank_taxon_richness(
         .collect();
 
     // Metadata famili diambil dari data spesies karena `map` hanya menyimpan ID.
-    let family_meta: HashMap<u64, Taxon> = species.iter().fold(HashMap::new(), |mut acc, species| {
-        acc.entry(species.taxonomy.family_id).or_insert_with(|| Taxon {
-            id: TaxonId(species.taxonomy.family_id),
-            name: species.taxonomy.family.trim().to_string(),
-            rank: TaxonomicRank::Family,
-            parent_id: parent_of.get(&TaxonId(species.taxonomy.family_id)).copied(),
+    let family_meta: HashMap<u64, Taxon> =
+        species.iter().fold(HashMap::new(), |mut acc, species| {
+            acc.entry(species.taxonomy.family_id)
+                .or_insert_with(|| Taxon {
+                    id: TaxonId(species.taxonomy.family_id),
+                    name: species.taxonomy.family.trim().to_string(),
+                    rank: TaxonomicRank::Family,
+                    parent_id: parent_of.get(&TaxonId(species.taxonomy.family_id)).copied(),
+                });
+            acc
         });
-        acc
-    });
 
     let mut distribution = frequency_distribution(species, |species| species.taxonomy.family_id);
     // Urutkan: jumlah spesies terbanyak dulu; jika sama, nama famili (A-Z); jika nama
@@ -297,9 +299,30 @@ mod tests {
 
     fn dataset() -> Vec<Species> {
         vec![
-            sample_species(1, DIPTEROCARPACEAE, "Dipterocarpaceae", SHOREA, "Shorea", "Endemic"),
-            sample_species(2, DIPTEROCARPACEAE, "Dipterocarpaceae", SHOREA, "Shorea", "Native"),
-            sample_species(3, DIPTEROCARPACEAE, "Dipterocarpaceae", HOPEA, "Hopea", "Endemic"),
+            sample_species(
+                1,
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                SHOREA,
+                "Shorea",
+                "Endemic",
+            ),
+            sample_species(
+                2,
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                SHOREA,
+                "Shorea",
+                "Native",
+            ),
+            sample_species(
+                3,
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                HOPEA,
+                "Hopea",
+                "Endemic",
+            ),
             sample_species(4, LAURACEAE, "Lauraceae", LITSEA, "Litsea", "Introduced"),
         ]
     }
@@ -324,8 +347,22 @@ mod tests {
     #[test]
     fn test_calculate_diversity_ignores_species_type_case_and_whitespace() {
         let species = vec![
-            sample_species(1, DIPTEROCARPACEAE, "Dipterocarpaceae", SHOREA, "Shorea", " ENDEMIC "),
-            sample_species(2, DIPTEROCARPACEAE, "Dipterocarpaceae", SHOREA, "Shorea", "Endemi"),
+            sample_species(
+                1,
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                SHOREA,
+                "Shorea",
+                " ENDEMIC ",
+            ),
+            sample_species(
+                2,
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                SHOREA,
+                "Shorea",
+                "Endemi",
+            ),
         ];
 
         assert_eq!(calculate_diversity(&species).endemic_species_count, 1);
@@ -335,9 +372,19 @@ mod tests {
     fn test_filter_endemic_taxa_keeps_only_affected_genus_and_family() {
         let taxons = vec![
             sample_taxon(1, "Plantae", TaxonomicRank::Kingdom, None),
-            sample_taxon(DIPTEROCARPACEAE, "Dipterocarpaceae", TaxonomicRank::Family, Some(1)),
+            sample_taxon(
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                TaxonomicRank::Family,
+                Some(1),
+            ),
             sample_taxon(LAURACEAE, "Lauraceae", TaxonomicRank::Family, Some(1)),
-            sample_taxon(SHOREA, "Shorea", TaxonomicRank::Genus, Some(DIPTEROCARPACEAE)),
+            sample_taxon(
+                SHOREA,
+                "Shorea",
+                TaxonomicRank::Genus,
+                Some(DIPTEROCARPACEAE),
+            ),
             sample_taxon(HOPEA, "Hopea", TaxonomicRank::Genus, Some(DIPTEROCARPACEAE)),
             sample_taxon(LITSEA, "Litsea", TaxonomicRank::Genus, Some(LAURACEAE)),
         ];
@@ -346,16 +393,29 @@ mod tests {
 
         let names: Vec<&str> = endemic.iter().map(|taxon| taxon.name.as_str()).collect();
         assert_eq!(names, vec!["Dipterocarpaceae", "Shorea", "Hopea"]);
-        assert!(endemic
-            .iter()
-            .all(|taxon| taxon.rank == TaxonomicRank::Genus || taxon.rank == TaxonomicRank::Family));
+        assert!(
+            endemic
+                .iter()
+                .all(|taxon| taxon.rank == TaxonomicRank::Genus
+                    || taxon.rank == TaxonomicRank::Family)
+        );
     }
 
     #[test]
     fn test_filter_endemic_taxa_without_endemic_species_is_empty() {
         let taxons = vec![
-            sample_taxon(DIPTEROCARPACEAE, "Dipterocarpaceae", TaxonomicRank::Family, None),
-            sample_taxon(SHOREA, "Shorea", TaxonomicRank::Genus, Some(DIPTEROCARPACEAE)),
+            sample_taxon(
+                DIPTEROCARPACEAE,
+                "Dipterocarpaceae",
+                TaxonomicRank::Family,
+                None,
+            ),
+            sample_taxon(
+                SHOREA,
+                "Shorea",
+                TaxonomicRank::Genus,
+                Some(DIPTEROCARPACEAE),
+            ),
         ];
         let species = vec![sample_species(
             1,
@@ -372,7 +432,10 @@ mod tests {
     #[test]
     fn test_rank_taxon_richness_sorts_by_species_count() {
         let map: HashMap<TaxonId, Vec<TaxonId>> = HashMap::from([
-            (TaxonId(1), vec![TaxonId(DIPTEROCARPACEAE), TaxonId(LAURACEAE)]),
+            (
+                TaxonId(1),
+                vec![TaxonId(DIPTEROCARPACEAE), TaxonId(LAURACEAE)],
+            ),
             (
                 TaxonId(DIPTEROCARPACEAE),
                 vec![TaxonId(SHOREA), TaxonId(HOPEA)],
@@ -394,17 +457,22 @@ mod tests {
 
     #[test]
     fn test_rank_taxon_richness_ties_are_sorted_by_name() {
-
         // ID famili sengaja dibuat berlawanan dengan urutan abjad:
         // "Zingiberaceae" (ID 5) < "Lauraceae" (ID 20) jika diurutkan menurut ID.
         const ZINGIBERACEAE: u64 = 5;
         const ALPINIA: u64 = 300;
 
         let species = vec![
-            sample_species(1, ZINGIBERACEAE, "Zingiberaceae", ALPINIA, "Alpinia", "Native"),
+            sample_species(
+                1,
+                ZINGIBERACEAE,
+                "Zingiberaceae",
+                ALPINIA,
+                "Alpinia",
+                "Native",
+            ),
             sample_species(2, LAURACEAE, "Lauraceae", LITSEA, "Litsea", "Native"),
         ];
-        
         let map: HashMap<TaxonId, Vec<TaxonId>> = HashMap::new();
 
         let rank = rank_taxon_richness(&map, &species);

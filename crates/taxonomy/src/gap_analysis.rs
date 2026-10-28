@@ -399,10 +399,13 @@ mod tests {
 
     #[test]
     fn test_analyze_taxonomic_gap_full_pipeline() {
-        let our_genera: HashSet<String> =
-            vec!["Shorea".to_string(), "Hopea".to_string(), "Durio".to_string()]
-                .into_iter()
-                .collect();
+        let our_genera: HashSet<String> = vec![
+            "Shorea".to_string(),
+            "Hopea".to_string(),
+            "Durio".to_string(),
+        ]
+        .into_iter()
+        .collect();
         let ref_genera: HashSet<String> = vec![
             "Shorea".to_string(),
             "Hopea".to_string(),
@@ -452,10 +455,13 @@ mod tests {
             },
         ];
 
-        let reference: HashSet<String> =
-            vec!["Shorea".to_string(), "Vatica".to_string(), "Hopea".to_string()]
-                .into_iter()
-                .collect();
+        let reference: HashSet<String> = vec![
+            "Shorea".to_string(),
+            "Vatica".to_string(),
+            "Hopea".to_string(),
+        ]
+        .into_iter()
+        .collect();
 
         let report = analyze_taxonomic_gap_from_taxons(&taxons, &reference);
         assert_eq!(
@@ -465,7 +471,7 @@ mod tests {
         assert!((report.coverage_score - (1.0 / 3.0)).abs() < 1e-6);
     }
 
-        #[test]
+    #[test]
     fn test_analyze_taxonomic_gap_sanitizes_reference_genera() {
         let our_genera: HashSet<String> = ["Shorea"].into_iter().map(String::from).collect();
         let reference: HashSet<String> = ["Shorea", " Vatica ", "", "   "]

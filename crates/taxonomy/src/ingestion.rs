@@ -56,23 +56,17 @@ pub fn parse_taxons(raw: &[RawTaxonRecord]) -> Result<Vec<Taxon>, PipelineError>
         ));
     }
 
-        let has_empty_type = raw.iter().any(|r| r.species_type.trim().is_empty());
-    if has_empty_type {
-        return Err(PipelineError::Validation(
-            "Species record contains an empty or whitespace-only species type".to_string(),
-        ));
-    }
-
     // Functional duplicate detection using fold and HashSet
-    let (has_duplicate_id, _) = raw
-        .iter()
-        .fold((false, HashSet::new()), |(duplicate_found, mut seen), record| {
+    let (has_duplicate_id, _) = raw.iter().fold(
+        (false, HashSet::new()),
+        |(duplicate_found, mut seen), record| {
             if duplicate_found || !seen.insert(record.id) {
                 (true, seen)
             } else {
                 (false, seen)
             }
-        });
+        },
+    );
 
     if has_duplicate_id {
         return Err(PipelineError::Validation(
@@ -139,16 +133,25 @@ pub fn parse_species(raw: &[RawSpeciesRecord]) -> Result<Vec<RawSpeciesRecord>, 
         ));
     }
 
+    // Species type is needed for endemic classification; never invent a default
+    let has_empty_type = raw.iter().any(|r| r.species_type.trim().is_empty());
+    if has_empty_type {
+        return Err(PipelineError::Validation(
+            "Species record contains an empty or whitespace-only species type".to_string(),
+        ));
+    }
+
     // Check for duplicate species IDs
-    let (has_duplicate_id, _) = raw
-        .iter()
-        .fold((false, HashSet::new()), |(duplicate_found, mut seen), record| {
+    let (has_duplicate_id, _) = raw.iter().fold(
+        (false, HashSet::new()),
+        |(duplicate_found, mut seen), record| {
             if duplicate_found || !seen.insert(record.id) {
                 (true, seen)
             } else {
                 (false, seen)
             }
-        });
+        },
+    );
 
     if has_duplicate_id {
         return Err(PipelineError::Validation(
@@ -169,8 +172,6 @@ pub fn parse_species(raw: &[RawSpeciesRecord]) -> Result<Vec<RawSpeciesRecord>, 
 
     Ok(species)
 }
-
-
 
 /// Validates hierarchical integrity of a collection of `Taxon` nodes.
 ///
@@ -332,11 +333,13 @@ mod tests {
                 id: 1,
                 scientific_name: " Shorea leprosula ".to_string(),
                 genus_id: TaxonId(10),
+                species_type: "Endemic".to_string(),
             },
             RawSpeciesRecord {
                 id: 2,
                 scientific_name: "Pongo pygmaeus".to_string(),
                 genus_id: TaxonId(20),
+                species_type: "Native".to_string(),
             },
         ];
 
@@ -360,6 +363,7 @@ mod tests {
             id: 1,
             scientific_name: "  ".to_string(),
             genus_id: TaxonId(10),
+            species_type: "Endemic".to_string(),
         }];
         let result = parse_species(&raw);
         assert!(matches!(result, Err(PipelineError::Validation(_))));
@@ -372,11 +376,13 @@ mod tests {
                 id: 10,
                 scientific_name: "Species A".to_string(),
                 genus_id: TaxonId(1),
+                species_type: "Endemic".to_string(),
             },
             RawSpeciesRecord {
                 id: 10,
                 scientific_name: "Species B".to_string(),
                 genus_id: TaxonId(2),
+                species_type: "Endemic".to_string(),
             },
         ];
         let result = parse_species(&raw);
