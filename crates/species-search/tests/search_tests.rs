@@ -12,9 +12,8 @@ fn load_species_fixtures() -> Vec<Species> {
     );
     let json_data = std::fs::read_to_string(fixture_path)
         .unwrap_or_else(|e| panic!("Gagal membaca fixture data species.json: {e}"));
-    
-    serde_json::from_str(&json_data)
-        .unwrap_or_else(|e| panic!("Gagal parsing data JSON: {e}"))
+
+    serde_json::from_str(&json_data).unwrap_or_else(|e| panic!("Gagal parsing data JSON: {e}"))
 }
 
 #[test]
@@ -22,8 +21,11 @@ fn test_search_by_common_name_orangutan() {
     let all_species = load_species_fixtures();
     let results = species_search::search("orangutan", &all_species);
 
-    assert!(!results.is_empty(), "Pencarian 'orangutan' harus mengembalikan hasil");
-    
+    assert!(
+        !results.is_empty(),
+        "Pencarian 'orangutan' harus mengembalikan hasil"
+    );
+
     let (top_species, score) = &results[0];
     assert_eq!(top_species.common_name, "Orangutan Kalimantan");
     assert!(*score > 0.0, "Skor relevansi harus lebih besar dari 0");
@@ -45,7 +47,10 @@ fn test_search_unknown_keyword_returns_empty() {
     let all_species = load_species_fixtures();
     let results = species_search::search("hewan_tidak_ada_xyz_123", &all_species);
 
-    assert!(results.is_empty(), "Kata kunci tidak dikenal harus mengembalikan hasil kosong");
+    assert!(
+        results.is_empty(),
+        "Kata kunci tidak dikenal harus mengembalikan hasil kosong"
+    );
 }
 
 #[test]
@@ -53,13 +58,16 @@ fn test_recommend_related_queries() {
     let all_species = load_species_fixtures();
     let suggestions = species_search::recommend_related_queries("orangutan", &all_species);
 
-    assert!(!suggestions.is_empty(), "Harus menghasilkan minimal satu saran query");
+    assert!(
+        !suggestions.is_empty(),
+        "Harus menghasilkan minimal satu saran query"
+    );
 }
 
 #[test]
 fn test_normal_matching_query_completes_without_panic() {
     let all_species = load_species_fixtures();
-    
+
     // Uji alur pencarian normal end-to-end (parse -> filter -> score -> rank)
     let results = species_search::search("orangutan kalimantan", &all_species);
 
@@ -84,4 +92,3 @@ fn test_normal_matching_query_completes_without_panic() {
         "Hasil harus terurut descending berdasarkan skor relevansi"
     );
 }
-

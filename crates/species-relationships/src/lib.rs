@@ -13,8 +13,8 @@
 //! > network stages are pending.
 
 pub(crate) mod stage1;
-pub(crate) mod stage4;
 pub(crate) mod stage2;
+pub(crate) mod stage4;
 pub mod types;
 
 #[cfg(test)]

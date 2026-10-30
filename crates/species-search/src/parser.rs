@@ -40,9 +40,7 @@ fn normalize_iucn_code(val: &str) -> Option<String> {
         }
         "en" | "endangered" | "genting" => Some("EN".to_string()),
         "vu" | "vulnerable" | "rentan" => Some("VU".to_string()),
-        "nt" | "near-threatened" | "near_threatened" | "hampir-terancam" => {
-            Some("NT".to_string())
-        }
+        "nt" | "near-threatened" | "near_threatened" | "hampir-terancam" => Some("NT".to_string()),
         "lc" | "least-concern" | "least_concern" | "risiko-rendah" => Some("LC".to_string()),
         "dd" | "data-deficient" | "data_deficient" | "kurang-data" => Some("DD".to_string()),
         "ew" | "extinct-in-the-wild" => Some("EW".to_string()),
@@ -55,9 +53,7 @@ fn normalize_iucn_code(val: &str) -> Option<String> {
 /// Maps a raw CITES designation to standard representation.
 fn normalize_cites(val: &str) -> Option<String> {
     match val.to_lowercase().as_str() {
-        "i" | "1" | "appendix-i" | "appendix_i" | "appendix-1" => {
-            Some("Appendix I".to_string())
-        }
+        "i" | "1" | "appendix-i" | "appendix_i" | "appendix-1" => Some("Appendix I".to_string()),
         "ii" | "2" | "appendix-ii" | "appendix_ii" | "appendix-2" => {
             Some("Appendix II".to_string())
         }
@@ -164,7 +160,6 @@ fn apply_classification(mut filters: QueryFilters, kind: TokenKind) -> QueryFilt
     }
     filters
 }
-
 
 /// ```
 pub(crate) fn extract_filters(tokens: &[String]) -> QueryFilters {
@@ -322,4 +317,3 @@ mod tests {
         assert_eq!(filters.species_type, None);
     }
 }
-

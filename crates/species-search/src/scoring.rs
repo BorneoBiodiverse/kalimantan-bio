@@ -56,7 +56,9 @@ fn fraction_satisfied(checks: &[Option<bool>]) -> f64 {
     let (satisfied, total) = checks
         .iter()
         .flatten()
-        .fold((0u32, 0u32), |(ok, n), &passed| (ok + u32::from(passed), n + 1));
+        .fold((0u32, 0u32), |(ok, n), &passed| {
+            (ok + u32::from(passed), n + 1)
+        });
 
     if total == 0 {
         0.0
@@ -67,7 +69,9 @@ fn fraction_satisfied(checks: &[Option<bool>]) -> f64 {
 
 /// Case-insensitive comparison of an optional filter value with a species field.
 fn eq_filter(filter: &Option<String>, value: &str) -> Option<bool> {
-    filter.as_ref().map(|wanted| wanted.eq_ignore_ascii_case(value))
+    filter
+        .as_ref()
+        .map(|wanted| wanted.eq_ignore_ascii_case(value))
 }
 
 /// Scores the text relevance of a species against query keywords.
@@ -179,7 +183,11 @@ pub(crate) fn score_species(
 
     // (is the component active?, its score, its weight)
     let components = [
-        (has_text, score_text_match(species, filters), weights.text_weight),
+        (
+            has_text,
+            score_text_match(species, filters),
+            weights.text_weight,
+        ),
         (
             has_taxonomy,
             score_taxonomy_match(species, filters),
@@ -265,7 +273,10 @@ mod tests {
 
     #[test]
     fn text_whole_word_in_name_scores_highest() {
-        assert_eq!(score_text_match(&orangutan(), &with_text(&["orangutan"])), 1.0);
+        assert_eq!(
+            score_text_match(&orangutan(), &with_text(&["orangutan"])),
+            1.0
+        );
     }
 
     #[test]
@@ -287,16 +298,31 @@ mod tests {
     #[test]
     fn text_is_case_insensitive_and_zero_without_keywords() {
         assert_eq!(score_text_match(&orangutan(), &with_text(&["PONGO"])), 1.0);
-        assert_eq!(score_text_match(&orangutan(), &QueryFilters::default()), 0.0);
+        assert_eq!(
+            score_text_match(&orangutan(), &QueryFilters::default()),
+            0.0
+        );
         assert_eq!(score_text_match(&orangutan(), &with_text(&["xyz123"])), 0.0);
     }
 
     #[test]
     fn taxonomy_is_fraction_of_satisfied_constraints() {
         let sp = orangutan(); // kingdom 1, class 3
-        let both = QueryFilters { kingdom_id: Some(1), class_id: Some(3), ..Default::default() };
-        let half = QueryFilters { kingdom_id: Some(1), class_id: Some(99), ..Default::default() };
-        let none = QueryFilters { kingdom_id: Some(2), class_id: Some(99), ..Default::default() };
+        let both = QueryFilters {
+            kingdom_id: Some(1),
+            class_id: Some(3),
+            ..Default::default()
+        };
+        let half = QueryFilters {
+            kingdom_id: Some(1),
+            class_id: Some(99),
+            ..Default::default()
+        };
+        let none = QueryFilters {
+            kingdom_id: Some(2),
+            class_id: Some(99),
+            ..Default::default()
+        };
         assert_eq!(score_taxonomy_match(&sp, &both), 1.0);
         assert_eq!(score_taxonomy_match(&sp, &half), 0.5);
         assert_eq!(score_taxonomy_match(&sp, &none), 0.0);
@@ -328,7 +354,11 @@ mod tests {
     #[test]
     fn species_perfect_match_scores_one_even_with_few_criteria() {
         // Only text is used -> weights are re-normalized, so a perfect match is 1.0, not 0.5.
-        let score = score_species(&orangutan(), &with_text(&["orangutan"]), &ScoringWeights::default());
+        let score = score_species(
+            &orangutan(),
+            &with_text(&["orangutan"]),
+            &ScoringWeights::default(),
+        );
         assert!((score - 1.0).abs() < 1e-12);
     }
 
@@ -348,7 +378,14 @@ mod tests {
 
     #[test]
     fn species_empty_query_scores_zero_and_stays_in_range() {
-        assert_eq!(score_species(&orangutan(), &QueryFilters::default(), &ScoringWeights::default()), 0.0);
+        assert_eq!(
+            score_species(
+                &orangutan(),
+                &QueryFilters::default(),
+                &ScoringWeights::default()
+            ),
+            0.0
+        );
         let full = QueryFilters {
             free_text: vec!["pongo".into()],
             kingdom_id: Some(1),

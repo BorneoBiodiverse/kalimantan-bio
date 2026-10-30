@@ -10,11 +10,11 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
-pub mod types;
-pub(crate) mod parser;
 pub(crate) mod filter;
-pub(crate) mod scoring;
+pub(crate) mod parser;
 pub(crate) mod recommendation;
+pub(crate) mod scoring;
+pub mod types;
 
 use kalimantanbio_shared::{
     core::Species,
@@ -45,10 +45,7 @@ use crate::types::ScoringWeights;
 ///     println!("{species} ({score})");
 /// }
 /// ```
-pub fn search<'a>(
-    raw_query: &str,
-    all_species: &'a [Species],
-) -> Vec<(&'a Species, f64)> {
+pub fn search<'a>(raw_query: &str, all_species: &'a [Species]) -> Vec<(&'a Species, f64)> {
     // 1. Normalisasi dan tokenisasi teks pencarian
     let normalized = normalize_text(raw_query);
     let tokens = tokenize(&normalized);
@@ -88,10 +85,7 @@ pub fn search<'a>(
 /// ```rust,ignore
 /// let suggestions = recommend_related_queries("mamalia", &all_species);
 /// ```
-pub fn recommend_related_queries(
-    raw_query: &str,
-    all_species: &[Species],
-) -> Vec<(String, f64)> {
+pub fn recommend_related_queries(raw_query: &str, all_species: &[Species]) -> Vec<(String, f64)> {
     //1. Ekstrak filter dari query awal
     let normalized = normalize_text(raw_query);
     let tokens = tokenize(&normalized);

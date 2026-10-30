@@ -45,9 +45,18 @@ pub(crate) fn matches_taxonomy(species: &Species, filters: &QueryFilters) -> boo
 /// Evaluates IUCN Red List category, CITES appendix, and P.106 national
 /// protection status.
 pub(crate) fn matches_conservation(species: &Species, filters: &QueryFilters) -> bool {
-    filters.iucn.as_ref().map_or(true, |v| eq_ci(&species.iucn, v))
-        && filters.cites.as_ref().map_or(true, |v| eq_ci(&species.cites, v))
-        && filters.p106.as_ref().map_or(true, |v| eq_ci(&species.p106, v))
+    filters
+        .iucn
+        .as_ref()
+        .map_or(true, |v| eq_ci(&species.iucn, v))
+        && filters
+            .cites
+            .as_ref()
+            .map_or(true, |v| eq_ci(&species.cites, v))
+        && filters
+            .p106
+            .as_ref()
+            .map_or(true, |v| eq_ci(&species.p106, v))
 }
 
 /// Checks whether a species matches origin/type requirements (e.g. "Endemic").
