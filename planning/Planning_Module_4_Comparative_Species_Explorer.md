@@ -235,7 +235,7 @@ Modul ini menggunakan `Species`, `Taxonomy`, dan `Observation` dari shared libra
 
 Tipe berikut spesifik untuk Modul 4 (`ComparisonQuery`, `ScoringWeights`, `SimilarityScore`, `SpeciesAttributeRow`, `ComparisonResult`) sudah didefinisikan di bagian 2.3.
 
-> **Catatan:** `taxonomy_score` menggunakan level kesamaan takson dari shared library. Total bobot `ScoringWeights` harus = 1.0.
+> **Catatan:** `taxonomy_score` menggunakan level kesamaan takson dari shared library. Total bobot `ScoringWeights` harus = 1.0. Nilai bawaan (`Default`): taxonomy = 0.40, conservation = 0.30, species_type = 0.15, distribution = 0.15.
 
 ### Data yang Digunakan
 
@@ -259,7 +259,7 @@ Mengambil data spesies dari source data (production database via shared library 
 
 | Fungsi | Signature | Deskripsi |
 | -------------- | ----------------------------- | ------------------ |
-| `validate_query` | `fn validate_query(query: &ComparisonQuery) -> Result<(), QueryError>` | **Uses SHARED `validate_id_list`**: Memvalidasi query: minimal 2 ID spesies, tidak ada duplikasi, tidak melebihi batas maksimal yang disepakati. Mengembalikan `QueryError::TooFewSpecies`, `QueryError::DuplicateId`, atau `QueryError::TooManySpecies` sesuai kondisi. |
+| `validate_query` | `fn validate_query(query: &ComparisonQuery) -> Result<(), QueryError>` | **Uses SHARED `validate_id_list`**: Memvalidasi query: minimal 2 ID spesies, tidak ada duplikasi, dan tidak melebihi batas maksimal yang disepakati (**10**, sama dengan `validate_id_list` di shared library). Mengembalikan `QueryError::TooFewSpecies`, `QueryError::DuplicateId`, atau `QueryError::TooManySpecies` sesuai kondisi. `QueryError` bersifat **private** (lihat §17.3); keluar dari modul hanya sebagai `ModuleError`. |
 | `retrieve_species` | **FROM SHARED LIBRARY**: `kalimantanbio_shared::db::fetch_all_species` | Mengambil seluruh data spesies dari production database (atau fixture). |
 | `fetch_species_by_ids` | `fn fetch_species_by_ids<'a>(ids: &[u64], all_species: &'a [Species]) -> Result<Vec<&'a Species>, DataError>` | **MODULE-SPECIFIC**: Mengambil spesies berdasarkan ID dari slice data yang tersedia menggunakan `.filter()`. Mengembalikan `DataError::SpeciesNotFound(id)` jika ada ID yang tidak ditemukan. |
 | `fetch_observations_for_species` | **FROM SHARED LIBRARY**: `kalimantanbio_shared::db::fetch_observations_for_species` | Mengambil semua data observasi untuk satu spesies. Mengembalikan slice kosong jika tidak ada observasi. |
@@ -326,7 +326,7 @@ Menggabungkan seluruh output tahap sebelumnya menjadi `ComparisonResult` lengkap
 | Fungsi / Komponen | Signature / Bentuk | Deskripsi |
 | ----------------- | ------------------ | ----------- |
 | `generate_summary` | `fn generate_summary(result: &ComparisonResult) -> String` | **MODULE-SPECIFIC**: Menghasilkan ringkasan teks perbandingan dari `shared_attributes`, `unique_attributes`, `distinguishing_characteristics`, dan `similarity_scores` tertinggi. Pure function, tidak melakukan I/O. |
-| `compare_species` | `fn compare_species(query: &ComparisonQuery, all_species: &[Species], all_observations: &[Observation], weights: &ScoringWeights) -> Result<ComparisonResult, ComparisonError>` | **MODULE ENTRY POINT**: Entry point pipeline utama: merangkai Tahap 1–4 menjadi `ComparisonResult` lengkap. |
+| `compare_species` | `fn compare_species(query: &ComparisonQuery, all_species: &[Species], all_observations: &[Observation]) -> Result<ComparisonResult, ModuleError>` | **MODULE ENTRY POINT**: Entry point pipeline utama: merangkai Tahap 1–4 menjadi `ComparisonResult` lengkap. Bobot scoring diambil dari `ScoringWeights::default()` (0.40/0.30/0.15/0.15). |
 | `fetch_all_species` | **FROM SHARED LIBRARY**: `kalimantanbio_shared::db::fetch_all_species` | Fetch semua spesies dari production database. |
 | `fetch_observations_for_species` | **FROM SHARED LIBRARY**: `kalimantanbio_shared::db::fetch_observations_for_species` | Fetch observasi per spesies dari production database. |
 | Unit Tests | `mod tests { ... }` | Menguji setiap fungsi dari Tahap 1–4 secara independen menggunakan data dummy `Vec<Species>` dan `Vec<Observation>`. |
@@ -353,9 +353,9 @@ fn compare_species(
     query: &ComparisonQuery,
     all_species: &[Species],
     all_observations: &[Observation],
-    weights: &ScoringWeights,
-) -> Result<ComparisonResult, ComparisonError> {
+) -> Result<ComparisonResult, ModuleError> {
     validate_query(query)?;   // module-specific wrapper (uses SHARED validate_id_list)
+    let weights = ScoringWeights::default();   // 0.40 / 0.30 / 0.15 / 0.15
     let species_list = fetch_species_by_ids(&query.species_ids, all_species)?;
     let observations_map: HashMap<u64, HashSet<u64>> = species_list
         .iter()
@@ -372,7 +372,7 @@ fn compare_species(
     let unique_attributes = find_unique_attributes(&attribute_matrix);
     let distinguishing_characteristics = find_distinguishing_characteristics(&attribute_matrix);
 
-    let similarity_scores = calculate_all_pairs(&species_list, &observations_map, weights);
+    let similarity_scores = calculate_all_pairs(&species_list, &observations_map, &weights);
 
     let mut result = ComparisonResult {
         query: query.clone(),
@@ -498,7 +498,7 @@ Sebelum implementasi dimulai, seluruh anggota perlu menyepakati:
 
 * Struktur `Species`, `Taxonomy`, `Observation` (dari shared library) serta tipe module-specific `ComparisonQuery`, `ScoringWeights`, `SimilarityScore`, dan `ComparisonResult`.
 * Arti setiap field, terutama field yang berasal dari singkatan (`iucn`, `cites`, `p106`).
-* Jumlah maksimal spesies yang dapat dibandingkan sekaligus dalam satu `ComparisonQuery`.
+* Jumlah maksimal spesies yang dapat dibandingkan sekaligus dalam satu `ComparisonQuery` (**disepakati: 10**, sama dengan `validate_id_list` di shared library).
 * Input dan output setiap fungsi, termasuk format string `shared_attributes` dan `unique_attributes`.
 * Function signature final untuk setiap tahap.
 * Formula dan bobot scoring pada `ScoringWeights` (default: taxonomy=0.40, conservation=0.30, type=0.15, distribution=0.15).
@@ -724,14 +724,14 @@ Bagian ini menjelaskan batas `mod` dan `pub fn` Modul 4 sebagai bukti pemenuhan 
 | --- | --- |
 | **Owns** | Validasi query perbandingan, konstruksi matriks atribut, analisis shared/unique/distinguishing, similarity scoring multi-dimensi, dan ringkasan perbandingan. |
 | **Does Not Own** | Data spesies/observasi/taksonomi (shared library), pencarian spesies (M1), relasi antarspesies (M2), analisis taksonomi mendalam (M3), publikasi (M5). |
-| **Internal** | `fetch_species_by_ids`, `fetch_observations_for_species`, `build_attribute_row`, `build_attribute_matrix`, `extract_attribute_values`, `is_attribute_shared`, `find_shared_attributes`, `find_unique_attributes`, `find_distinguishing_characteristics`, `best_score`, `score_conservation`, `score_species_type`, `score_distribution`, `calculate_all_pairs`, `find_most_similar`, `generate_summary`. |
+| **Internal** | `validate_query`, `fetch_species_by_ids`, `fetch_observations_for_species`, `build_kabupaten_set`, `build_attribute_row`, `build_attribute_matrix`, `extract_attribute_values`, `is_attribute_shared`, `find_shared_attributes`, `find_unique_attributes`, `find_distinguishing_characteristics`, `score_conservation`, `score_species_type`, `score_distribution`, `calculate_all_pairs`, `find_most_similar`, `generate_summary`. |
 | **Publicly Exposes** | `compare_species` (main) dan `calculate_pair_similarity` (pasangan, opsional) — kapabilitas yang dapat digunakan Axum handler maupun modul lain. |
 
 ### 17.2 Fungsi Publik (`pub fn`) — Modul 4
 
 | `pub fn` | Provider | Consumer Potensial | Purpose | Input | Output | Why Needed |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compare_species` | Modul 4 | Axum handler `/api/v1/compare` | Pipeline utama Tahap 1–5 | `&ComparisonQuery`, globals | `Result<ComparisonResult, ModuleError>` | Kapabilitas utama modul untuk aplikasi dan modul lain. |
+| `compare_species` | Modul 4 | Axum handler `/api/v1/compare` | Pipeline utama Tahap 1–5 | `&ComparisonQuery` + snapshot `&[Species]`, `&[Observation]` | `Result<ComparisonResult, ModuleError>` | Kapabilitas utama modul untuk aplikasi dan modul lain. |
 | `calculate_pair_similarity` *(sudah `pub` di contoh)* | Modul 4 | Internal `calculate_all_pairs`; opsional publik untuk modul lain | Menghitung skor kesamaan sepasang spesies | dua spesies + observasi | `SimilarityScore` | Hitungan inti yang dapat diuji dan digunakan ulang. |
 
 ```rust
@@ -758,7 +758,7 @@ pub fn compare_species(
 | --- | --- | --- | --- |
 | `fetch_species_by_ids`, `fetch_observations_for_species`, `build_attribute_row`, `build_attribute_matrix`, `extract_attribute_values` | private | Internal helper (module-specific) | Pipeline |
 | `is_attribute_shared`, `find_shared_attributes`, `find_unique_attributes`, `find_distinguishing_characteristics` | private | Internal helper (module-specific) | Pipeline |
-| `best_score`, `score_conservation`, `score_species_type`, `score_distribution` | private | Internal helper (module-specific) | `calculate_pair_similarity` |
+| `score_conservation`, `score_species_type`, `score_distribution` | private | Internal helper (module-specific) | `calculate_pair_similarity` |
 | `calculate_all_pairs`, `find_most_similar`, `generate_summary` | private | Internal helper (module-specific) | Pipeline |
 | `calculate_pair_similarity` | `pub fn` | Module API (opsional) | Internal; opsional modul lain |
 | `compare_species` | `pub fn` | Module API | Axum handler; opsional modul lain |
@@ -798,7 +798,7 @@ Modul 3 ──DiversityStats─▶ Modul 4 (konteks keanekaragaman, opsional)
 Rustdoc diwajibkan untuk **seluruh `pub fn`** dan **seluruh tipe publik** modul ini:
 
 * `compare_species`, `calculate_pair_similarity`.
-* Tipe publik yang muncul di signature `pub fn` (mis. `ComparisonQuery`, `ComparisonResult`, `SimilarityScore`, `AttributeRow`, `ComparisonError`).
+* Tipe publik yang muncul di signature `pub fn` (mis. `ComparisonQuery`, `ComparisonResult`, `SimilarityScore`, `SpeciesAttributeRow`, `ScoringWeights`, `ModuleError`).
 
 Command verifikasi:
 

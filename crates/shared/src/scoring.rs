@@ -21,11 +21,15 @@
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// let combined = combine_weighted_scores(&[(0.8, 0.6), (0.5, 0.4)]);
+/// ```rust
+/// use kalimantanbio_shared::scoring::combine_weighted_scores;
+///
+/// let combined = combine_weighted_scores(&[(0.8, 0.5), (0.4, 0.5)]);
+///
+/// assert!((combined - 0.6).abs() < 1e-9);
 /// ```
 pub fn combine_weighted_scores(scores: &[(f64, f64)]) -> f64 {
-    todo!("shared scoring phase 3: combine_weighted_scores")
+    scores.iter().map(|(score, weight)| score * weight).sum()
 }
 
 /// Normalize a score into the inclusive range `[min, max]`.
@@ -75,8 +79,9 @@ pub fn normalize_score(score: f64, min: f64, max: f64) -> f64 {
 /// ```rust,ignore
 /// let ranked = rank_by_score(vec![("a", 0.5), ("b", 0.9)]);
 /// ```
-pub fn rank_by_score<T>(items: Vec<(T, f64)>) -> Vec<(T, f64)> {
-    todo!("shared scoring phase 3: rank_by_score")
+pub fn rank_by_score<T>(mut items: Vec<(T, f64)>) -> Vec<(T, f64)> {
+    items.sort_by(|left, right| right.1.total_cmp(&left.1));
+    items
 }
 
 /// Keep the top N items by score.
@@ -128,4 +133,26 @@ pub fn top_n<T>(items: Vec<(T, f64)>, n: usize) -> Vec<(T, f64)> {
 /// ```
 pub fn filter_by_threshold<T>(items: Vec<(T, f64)>, min_score: f64) -> Vec<(T, f64)> {
     todo!("shared scoring phase 3: filter_by_threshold")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combines_weighted_contributions() {
+        let combined = combine_weighted_scores(&[(1.0, 0.5), (0.5, 0.3), (0.0, 0.2)]);
+        assert!((combined - 0.65).abs() < 1e-9);
+    }
+
+    #[test]
+    fn empty_input_scores_zero() {
+        assert_eq!(combine_weighted_scores(&[]), 0.0);
+    }
+
+    #[test]
+    fn zero_weights_contribute_nothing() {
+        let combined = combine_weighted_scores(&[(1.0, 0.0), (0.5, 1.0)]);
+        assert!((combined - 0.5).abs() < 1e-9);
+    }
 }

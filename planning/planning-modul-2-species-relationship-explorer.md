@@ -293,7 +293,7 @@ enum ExplorerError {
 }
 ```
 
-> **Catatan:** Struktur data perlu disepakati seluruh anggota sebelum implementasi. `BTreeSet` dipilih untuk menghapus duplikasi dan menjaga urutan nilai yang stabil. Nilai `None` dan himpunan kosong menandakan data belum tersedia untuk perbandingan, bukan bukti bahwa atribut tersebut tidak dimiliki spesies.
+> **Catatan:** Struktur data perlu disepakati seluruh anggota sebelum implementasi. `HashSet` dipilih untuk menghapus duplikasi; urutan nilai pada bukti dijamin melalui pengurutan eksplisit (`shared_values`), sehingga hasil tetap deterministik. Nilai `None` dan himpunan kosong menandakan data belum tersedia untuk perbandingan, bukan bukti bahwa atribut tersebut tidak dimiliki spesies.
 
 ### Data yang Digunakan
 
@@ -302,8 +302,8 @@ enum ExplorerError {
 | `Species.id` | `String` | ID stabil dari repository; wajib unik dan tidak kosong. |
 | `scientific_name` | `String` | Nama ilmiah untuk label; wajib tidak kosong dan kapitalisasi tampilannya dipertahankan. |
 | `taxonomy` | `Taxonomy` | Ordo, famili, dan genus opsional; dibandingkan pada tingkat yang sama. |
-| `habitats` | `BTreeSet<String>` | Label habitat dari kosakata terkendali. |
-| `characteristics` | `BTreeSet<String>` | Karakteristik terstruktur, misalnya `growth_form:tree`; bukan pencocokan bebas seluruh paragraf. |
+| `habitats` | `HashSet<String>` | Label habitat dari kosakata terkendali pada field kanonik `Species.habitats`; himpunan kosong berarti tidak tersedia. |
+| `characteristics` | `HashSet<String>` | Karakteristik terstruktur, misalnya `growth_form:tree`, pada field kanonik `Species.characteristics`; bukan pencocokan bebas seluruh paragraf. |
 | `min_score` | `f64` | Ambang inklusif dalam rentang 0–1; default adapter `0.20`. |
 | `limit` | `usize` | Maksimal tetangga yang dikembalikan; default `10`, rentang `1..=50`. |
 | `required_basis` | `Option<AttributeKind>` | Jika diisi, kandidat harus memiliki similarity positif pada dimensi tersebut. |
@@ -341,9 +341,9 @@ Membandingkan setiap kandidat terhadap spesies pusat. Semua skor dihitung dari d
 | Fungsi | Signature | Deskripsi |
 | --- | --- | --- |
 | `taxonomy_evidence` | `fn taxonomy_evidence(a: &Taxonomy, b: &Taxonomy) -> AttributeEvidence` | **Uses SHARED `calculate_taxonomy_similarity`**: Mengambil kesamaan pada tingkat ordo, famili, dan genus serta nilai taksonomi tertinggi yang cocok. |
-| `set_evidence` | `fn set_evidence(kind: AttributeKind, a: &BTreeSet<String>, b: &BTreeSet<String>) -> AttributeEvidence` | **Uses SHARED `jaccard_similarity`**: Menghitung Jaccard dan irisan nilai untuk habitat atau karakteristik. |
+| `set_evidence` | `fn set_evidence(kind: AttributeKind, a: &HashSet<String>, b: &HashSet<String>) -> AttributeEvidence` | **Uses SHARED `jaccard_similarity` / `set_intersection`**: Menghitung Jaccard dan irisan nilai (terurut) untuk habitat atau karakteristik. |
 | `collect_evidence` | `fn collect_evidence(a: &Species, b: &Species) -> Vec<AttributeEvidence>` | **MODULE-SPECIFIC**: Menghasilkan tepat satu bukti per dimensi, berurutan taksonomi, habitat, karakteristik. |
-| `calculate_relationship` | `fn calculate_relationship(evidence: &[AttributeEvidence], weights: &ScoreWeights) -> RelationshipScore` | **Uses SHARED `combine_weighted_scores`**: Menggabungkan similarity dan coverage memakai bobot yang telah divalidasi. |
+| `score_evidence` | `fn score_evidence(evidence: &[AttributeEvidence], weights: &ScoreWeights) -> RelationshipScore` | **Uses SHARED `combine_weighted_scores`**: Menggabungkan similarity dan coverage memakai bobot yang telah divalidasi. `calculate_relationship` publik (§17.2) memvalidasi bobot lalu mengomposisikan fungsi ini. |
 
 ### Aturan Scoring Awal
 
@@ -941,15 +941,13 @@ domain data only: nodes, edges, scores, and explanations.
 
 ### 19.4 Binding data prerequisite
 
-The current shared `Species` contract contains taxonomy and conservation data,
-but does not contain canonical habitat or characteristic collections. The
-three-dimensional scoring plan therefore cannot be implemented by reading
-undeclared fields. Before implementation, `kalimantanbio-shared` must provide
-one canonical, documented source for those two dimensions (shared fields or a
-shared evidence accessor). A module-local replacement type, database query,
-or guessed ecological value is forbidden. Until that shared contract exists,
-the implementation must keep the affected dimensions explicitly unavailable
-and report their coverage rather than silently assigning scores.
+The shared `Species` contract now provides canonical `habitats` and
+`characteristics` collections (`HashSet<String>`, `#[serde(default)]`; an
+empty set means the data is unavailable). These fields are the single source
+for the habitat and characteristic dimensions: a module-local replacement
+type, database query, or guessed ecological value remains forbidden. When the
+data is unavailable, evidence extraction reports `None` and the coverage
+reflects the missing dimension instead of silently assigning scores.
 
 The runtime dependency remains `kalimantanbio-shared` only; `serde` is for
 serialization of module-owned result types and `tokio` is test-only.

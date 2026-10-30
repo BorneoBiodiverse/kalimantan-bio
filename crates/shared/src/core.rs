@@ -1,5 +1,7 @@
 //! Core domain types shared across all modules.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 /// A biodiversity species record.
@@ -29,6 +31,17 @@ pub struct Species {
     pub image_url: Option<String>,
     /// Taxonomic classification of the species.
     pub taxonomy: Taxonomy,
+    /// Habitat labels from the controlled vocabulary.
+    ///
+    /// An empty set means habitat data is unavailable for comparison,
+    /// not that the species has no habitat.
+    #[serde(default)]
+    pub habitats: HashSet<String>,
+    /// Structured characteristic labels (e.g. `growth_form:tree`).
+    ///
+    /// An empty set means characteristic data is unavailable for comparison.
+    #[serde(default)]
+    pub characteristics: HashSet<String>,
     /// Number of observation records.
     pub observation_count: u32,
     /// Total recorded individuals.
@@ -85,6 +98,8 @@ pub enum TaxonomicRank {
     Family = 5,
     /// Genus (rank 6).
     Genus = 6,
+    /// Species (rank 7).
+    Species = 7,
 }
 
 /// A verified observation record for a species.

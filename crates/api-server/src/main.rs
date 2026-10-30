@@ -31,7 +31,10 @@ use tower_http::cors::CorsLayer;
 pub fn build_router() -> Router {
     Router::new()
         // Module 1 — Intelligent Species Search
-        .route("/api/v1/search", axum::routing::get(routes::search::search_species))
+        .route(
+            "/api/v1/search",
+            axum::routing::get(routes::search::search_species),
+        )
         .route(
             "/api/v1/search/recommendations",
             axum::routing::get(routes::search::recommend_queries),

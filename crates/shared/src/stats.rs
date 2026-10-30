@@ -24,10 +24,8 @@ use std::hash::Hash;
 /// ```rust,ignore
 /// let counts = count_by_key(&species, |s| s.taxonomy.family.clone());
 /// ```
-pub fn count_by_key<T, K: Hash + Eq>(
-    items: &[T],
-    key_fn: impl Fn(&T) -> K,
-) -> HashMap<K, usize> {
+
+pub fn count_by_key<T, K: Hash + Eq>(items: &[T], key_fn: impl Fn(&T) -> K) -> HashMap<K, usize> {
     items.iter().fold(HashMap::new(), |mut acc, item| {
         *acc.entry(key_fn(item)).or_insert(0) += 1;
         acc
