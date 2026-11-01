@@ -30,7 +30,8 @@ pub(crate) fn matches_free_text(species: &Species, filters: &QueryFilters) -> bo
 
 /// Checks whether a species matches taxonomic classification filters.
 ///
-/// Evaluates kingdom ID and class ID constraints when specified.
+/// Evaluates every specified level: kingdom / class IDs and the
+/// kingdom, class, order, family, and genus names.
 pub(crate) fn matches_taxonomy(species: &Species, filters: &QueryFilters) -> bool {
     filters
         .kingdom_id
@@ -80,7 +81,8 @@ pub(crate) fn matches_species_type(species: &Species, filters: &QueryFilters) ->
 
 /// Filters a slice of species records, retaining only those matching all query criteria.
 ///
-/// Applies all individual predicates sequentially via functional iterator composition.
+/// Applies all individual predicates sequentially via functional iterator composition,
+/// including the verification flag (`is_verified`) when the query sets it.
 pub(crate) fn filter_species<'a>(
     species_list: &'a [Species],
     filters: &QueryFilters,
