@@ -22,10 +22,7 @@ const FLOAT_TOLERANCE: f64 = 1e-9;
 /// Mengambil semua kandidat spesies dari dataset selain spesies pusat.
 ///
 /// Mengevaluasi seluruh kandidat untuk mempermudah verifikasi dan determinisme.
-pub(crate) fn candidate_species<'a>(
-    all: &'a [Species],
-    center_id: &SpeciesId,
-) -> Vec<&'a Species> {
+pub(crate) fn candidate_species<'a>(all: &'a [Species], center_id: &SpeciesId) -> Vec<&'a Species> {
     all.iter().filter(|s| s.id != *center_id).collect()
 }
 
@@ -53,7 +50,7 @@ fn format_dimension_explanation(evidence: &AttributeEvidence, weights: &ScoreWei
             match evidence.similarity {
                 Some(sim) if sim > FLOAT_TOLERANCE => {
                     let contrib = sim * weight;
-                    
+
                     let match_desc = if let Some(genus) = find_prefix_value(&evidence.shared_values, "genus:") {
                         format!("Memiliki genus yang sama: {genus}")
                     } else if let Some(family) = find_prefix_value(&evidence.shared_values, "family:") {
@@ -63,7 +60,7 @@ fn format_dimension_explanation(evidence: &AttributeEvidence, weights: &ScoreWei
                     } else {
                         "Memiliki kesamaan taksonomi".to_string()
                     };
-                    
+
                     format!("{match_desc}. Kontribusi taksonomi {contrib:.2}.")
                 }
                 Some(_) => {
@@ -80,7 +77,7 @@ fn format_dimension_explanation(evidence: &AttributeEvidence, weights: &ScoreWei
                 Some(sim) if sim > FLOAT_TOLERANCE => {
                     let contrib = sim * weight;
                     let list = evidence.shared_values.join(", ");
-                    
+
                     format!("Memiliki habitat yang sama: {list}. Kontribusi habitat {contrib:.2}.")
                 }
                 Some(_) => {
@@ -97,7 +94,7 @@ fn format_dimension_explanation(evidence: &AttributeEvidence, weights: &ScoreWei
                 Some(sim) if sim > FLOAT_TOLERANCE => {
                     let contrib = sim * weight;
                     let list = evidence.shared_values.join(", ");
-                    
+
                     format!("Memiliki karakteristik yang sama: {list}. Kontribusi karakteristik {contrib:.2}.")
                 }
                 Some(_) => {
@@ -132,7 +129,7 @@ pub(crate) fn score_candidates(
             let evidence = collect_evidence(center, candidate);
             let score = score_evidence(&evidence, weights);
             let explanations = explain_relationship(&score, weights);
-            
+
             RelatedSpecies {
                 species: (*candidate).clone(),
                 score,
@@ -155,7 +152,8 @@ pub(crate) fn rank_related(
 ) -> Vec<RelatedSpecies> {
     // Aturan 1: Filter kandidat berskor positif dan memenuhi ambang minimal
     items.retain(|item| {
-        item.score.total > FLOAT_TOLERANCE && item.score.total >= (query.min_score - FLOAT_TOLERANCE)
+        item.score.total > FLOAT_TOLERANCE
+            && item.score.total >= (query.min_score - FLOAT_TOLERANCE)
     });
 
     // Aturan 2: Filter dimensi basis wajib (jika ditentukan)
@@ -239,7 +237,8 @@ mod tests {
         assert!(scored[0].explanations[0].contains("Kontribusi taksonomi 0.50"));
         assert!(scored[0].explanations[1].contains("Memiliki habitat yang sama: wetland"));
         assert!(scored[0].explanations[1].contains("Kontribusi habitat 0.15"));
-        assert!(scored[0].explanations[2].contains("Memiliki karakteristik yang sama: evergreen, woody"));
+        assert!(scored[0].explanations[2]
+            .contains("Memiliki karakteristik yang sama: evergreen, woody"));
         assert!(scored[0].explanations[2].contains("Kontribusi karakteristik 0.20"));
 
         // sp-c: ID 3
@@ -251,7 +250,8 @@ mod tests {
         // sp-d: ID 4
         assert_eq!(scored[2].species.id, 4);
         assert_close(scored[2].score.total, 0.0);
-        assert!(scored[2].explanations[0].contains("Taksonomi berbeda pada tingkat yang dapat dibandingkan"));
+        assert!(scored[2].explanations[0]
+            .contains("Taksonomi berbeda pada tingkat yang dapat dibandingkan"));
         assert!(scored[2].explanations[1].contains("Tidak ada habitat bersama"));
         assert!(scored[2].explanations[2].contains("Tidak ada karakteristik bersama"));
     }
