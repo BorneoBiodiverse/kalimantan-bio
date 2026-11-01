@@ -18,6 +18,59 @@ fn load_species_fixtures() -> Vec<Species> {
 }
 
 #[test]
+fn test_punctuation_does_not_change_results() {
+    let all_species = load_species_fixtures();
+
+    let plain: Vec<_> = species_search::search("mamalia kritis", &all_species)
+        .into_iter()
+        .map(|(s, _)| s.scientific_name.clone())
+        .collect();
+    let punctuated: Vec<_> = species_search::search("mamalia, kritis!", &all_species)
+        .into_iter()
+        .map(|(s, _)| s.scientific_name.clone())
+        .collect();
+
+    assert_eq!(plain, punctuated);
+    assert_eq!(plain.len(), 2, "hanya mamalia berstatus CR");
+}
+
+#[test]
+fn test_filter_by_kingdom_and_species_type() {
+    let all_species = load_species_fixtures();
+
+    let plants = species_search::search("tumbuhan", &all_species);
+    assert_eq!(plants.len(), 1);
+    assert_eq!(plants[0].0.scientific_name, "Rafflesia arnoldii");
+
+    let endemic = species_search::search("endemik", &all_species);
+    assert_eq!(endemic.len(), 2);
+    assert!(endemic.iter().all(|(s, _)| s.species_type == "Endemic"));
+}
+
+#[test]
+fn test_filter_by_cites_and_protection() {
+    let all_species = load_species_fixtures();
+
+    let cites_i = species_search::search("cites:appendix-i", &all_species);
+    assert_eq!(cites_i.len(), 4);
+    assert!(cites_i.iter().all(|(s, _)| s.cites == "Appendix I"));
+
+    let protected = species_search::search("p106:dilindungi", &all_species);
+    assert_eq!(protected.len(), 5);
+
+    let unprotected = species_search::search("tidak dilindungi", &all_species);
+    assert!(unprotected.is_empty());
+}
+
+#[test]
+fn test_filter_by_verification_flag() {
+    let all_species = load_species_fixtures();
+
+    assert_eq!(species_search::search("terverifikasi", &all_species).len(), 5);
+    assert!(species_search::search("verified:false", &all_species).is_empty());
+}
+
+#[test]
 fn test_search_by_common_name_orangutan() {
     let all_species = load_species_fixtures();
     let results = species_search::search("orangutan", &all_species);

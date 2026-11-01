@@ -57,7 +57,9 @@ fn normalize_iucn_code(val: &str) -> Option<String> {
         "dd" | "data-deficient" | "data_deficient" | "kurang-data" => Some("DD".to_string()),
         "ew" | "extinct-in-the-wild" | "punah-di-alam" => Some("EW".to_string()),
         "ex" | "extinct" | "punah" => Some("EX".to_string()),
-        other if !other.is_empty() => Some(other.to_uppercase()),
+        other if other.len() == 2 && other.chars().all(|c| c.is_ascii_alphabetic()) => {
+            Some(other.to_uppercase())
+        }
         _ => None,
     }
 }
@@ -158,7 +160,17 @@ fn normalize_class(val: &str) -> Option<String> {
 /// Parses a token with a known key-value prefix (e.g. `key:value`).
 fn parse_prefixed_token(prefix: &str, value: &str) -> Option<TokenKind> {
     match prefix.to_lowercase().as_str() {
-        "iucn" | "status" => normalize_iucn_code(value).map(TokenKind::Iucn),
+        // `status:` is ambiguous in Indonesian queries: fall back to the P.106
+        // protection vocabulary when the value is not a valid IUCN code, so
+        // `status:dilindungi` does not become an imaginary IUCN category.
+        "iucn" | "status" => match normalize_iucn_code(value) {
+            Some(code) => Some(TokenKind::Iucn(code)),
+            None => match value.to_lowercase().as_str() {
+                "dilindungi" | "protected" | "tidak-dilindungi" | "tidak_dilindungi" | "bebas"
+                | "unprotected" => normalize_p106(value).map(TokenKind::P106),
+                _ => None,
+            },
+        },
         "p106" | "protection" | "perlindungan" => normalize_p106(value).map(TokenKind::P106),
         "type" | "species_type" | "origin" | "tipe" | "asal" => {
             normalize_species_type(value).map(TokenKind::SpeciesType)
@@ -235,9 +247,15 @@ fn classify_token(token: &str) -> TokenKind {
         }
         "en" | "genting" | "endangered" => TokenKind::Iucn("EN".to_string()),
         "vu" | "rentan" | "vulnerable" => TokenKind::Iucn("VU".to_string()),
-        "nt" | "hampir-terancam" | "near-threatened" => TokenKind::Iucn("NT".to_string()),
-        "lc" | "risiko-rendah" | "least-concern" => TokenKind::Iucn("LC".to_string()),
-        "dd" | "kurang-data" | "data-deficient" => TokenKind::Iucn("DD".to_string()),
+        "nt" | "hampir-terancam" | "near-threatened" | "near_threatened" => {
+            TokenKind::Iucn("NT".to_string())
+        }
+        "lc" | "risiko-rendah" | "least-concern" | "least_concern" => {
+            TokenKind::Iucn("LC".to_string())
+        }
+        "dd" | "kurang-data" | "data-deficient" | "data_deficient" => {
+            TokenKind::Iucn("DD".to_string())
+        }
         "ew" | "punah-di-alam" | "extinct-in-the-wild" => TokenKind::Iucn("EW".to_string()),
         "ex" | "punah" | "extinct" => TokenKind::Iucn("EX".to_string()),
 
@@ -253,10 +271,10 @@ fn classify_token(token: &str) -> TokenKind {
         "introduksi" | "introduced" => TokenKind::SpeciesType("Introduced".to_string()),
 
         // Categories & Classes (Natural Language multi-lang)
-        "mamalia" | "mammalia" | "mammal" | "mammals" => {
+        "mamalia" | "mammalia" | "mammal" | "mammals" | "menyusui" => {
             TokenKind::Class("Mammalia".to_string())
         }
-        "reptil" | "reptilia" | "reptile" | "reptiles" => {
+        "reptil" | "reptilia" | "reptile" | "reptiles" | "melata" => {
             TokenKind::Class("Reptilia".to_string())
         }
         "aves" | "burung" | "unggas" | "bird" | "birds" => {
@@ -274,9 +292,15 @@ fn classify_token(token: &str) -> TokenKind {
         "arachnida" | "arachnid" | "arachnids" | "laba-laba" | "labalaba" | "spider" | "spiders" => {
             TokenKind::Class("Arachnida".to_string())
         }
-        "magnoliopsida" | "dikotil" => TokenKind::Class("Magnoliopsida".to_string()),
-        "liliopsida" | "monokotil" => TokenKind::Class("Liliopsida".to_string()),
-        "pinopsida" | "konifer" => TokenKind::Class("Pinopsida".to_string()),
+        "magnoliopsida" | "dikotil" | "dicot" | "dicotyledon" => {
+            TokenKind::Class("Magnoliopsida".to_string())
+        }
+        "liliopsida" | "monokotil" | "monocot" | "monocotyledon" => {
+            TokenKind::Class("Liliopsida".to_string())
+        }
+        "pinopsida" | "konifer" | "conifer" | "gymnospermae" => {
+            TokenKind::Class("Pinopsida".to_string())
+        }
 
         // Kingdoms (Natural Language multi-lang)
         "hewan" | "satwa" | "fauna" | "binatang" | "animalia" | "animal" | "animals" => {
@@ -295,6 +319,66 @@ fn classify_token(token: &str) -> TokenKind {
         // Everything else is treated as free text
         _ => TokenKind::FreeText(token.to_string()),
     }
+}
+
+/// Multi-word phrases that must be matched as a single token.
+///
+/// Every entry maps a phrase (case-insensitive) to the hyphenated token that
+/// [`classify_token`] already understands. Without this, a phrase such as
+/// `punah di alam` would be split into `punah` (EX) plus stray free text.
+const PHRASES: &[(&[&str], &str)] = &[
+    (&["extinct", "in", "the", "wild"], "extinct-in-the-wild"),
+    (&["critically", "endangered"], "critically-endangered"),
+    (&["least", "concern"], "least-concern"),
+    (&["data", "deficient"], "data-deficient"),
+    (&["near", "threatened"], "near-threatened"),
+    (&["punah", "di", "alam"], "punah-di-alam"),
+    (&["hampir", "terancam"], "hampir-terancam"),
+    (&["risiko", "rendah"], "risiko-rendah"),
+    (&["kurang", "data"], "kurang-data"),
+    (&["tidak", "dilindungi"], "tidak-dilindungi"),
+    (&["appendix", "i"], "appendix-i"),
+    (&["appendix", "ii"], "appendix-ii"),
+    (&["appendix", "iii"], "appendix-iii"),
+    (&["laba", "laba"], "laba-laba"),
+];
+
+/// Collapses known multi-word phrases into their single hyphenated token.
+///
+/// The longest matching phrase wins, and non-matching tokens are preserved.
+fn merge_phrases(tokens: &[String]) -> Vec<String> {
+    let mut merged = Vec::with_capacity(tokens.len());
+    let mut index = 0;
+
+    while index < tokens.len() {
+        let mut best: Option<(usize, &str)> = None;
+
+        for (phrase, canonical) in PHRASES {
+            if index + phrase.len() > tokens.len() {
+                continue;
+            }
+            let matches = phrase
+                .iter()
+                .enumerate()
+                .all(|(offset, word)| tokens[index + offset].eq_ignore_ascii_case(word));
+            if matches && best.map_or(true, |(len, _)| phrase.len() > len) {
+                best = Some((phrase.len(), canonical));
+            }
+        }
+
+        match best {
+            Some((len, canonical)) => {
+                merged.push(canonical.to_string());
+                index += len;
+            }
+            None => {
+                merged.push(tokens[index].clone());
+                index += 1;
+            }
+        }
+    }
+
+    merged
 }
 
 /// Applies a single classified token to the `QueryFilters` accumulator.
@@ -317,9 +401,30 @@ fn apply_classification(mut filters: QueryFilters, kind: TokenKind) -> QueryFilt
     filters
 }
 
+/// Removes punctuation attached to a token while keeping the characters that
+/// carry meaning: `:` separates a prefix from its value (`iucn:cr`), `-` joins
+/// the words of a known phrase (`hampir-terancam`), and `_` appears in prefix
+/// names and vocabulary (`kingdom_id`, `tidak_dilindungi`).
+fn clean_token(token: &str) -> String {
+    token
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ':' | '-' | '_'))
+        .collect()
+}
+
 /// Extracts structured query filters from a slice of tokens.
+///
+/// Punctuation is stripped from each token first, then known multi-word phrases
+/// (e.g. `hampir terancam`, `punah di alam`) are merged into one token before
+/// classification, so `mamalia, kritis` parses exactly like `mamalia kritis`.
 pub fn extract_filters(tokens: &[String]) -> QueryFilters {
-    let final_state = tokens
+    let cleaned_tokens: Vec<String> = tokens
+        .iter()
+        .map(|token| clean_token(token))
+        .filter(|token| !token.is_empty())
+        .collect();
+    let merged_tokens = merge_phrases(&cleaned_tokens);
+    let final_state = merged_tokens
         .iter()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
@@ -527,6 +632,77 @@ mod tests {
         assert_eq!(filters.iucn, None);
         assert_eq!(filters.p106, None);
         assert_eq!(filters.species_type, None);
+    }
+
+    #[test]
+    fn test_punctuation_is_ignored() {
+        let punctuated = parse_query("mamalia, kritis");
+        let plain = parse_query("mamalia kritis");
+        assert_eq!(punctuated, plain);
+        assert_eq!(punctuated.class, Some("Mammalia".to_string()));
+        assert_eq!(punctuated.iucn, Some("CR".to_string()));
+
+        assert_eq!(parse_query("iucn:cr,").iucn, Some("CR".to_string()));
+        assert_eq!(parse_query("orangutan!").free_text, vec!["orangutan".to_string()]);
+        assert_eq!(parse_query("\"orangutan\"").free_text, vec!["orangutan".to_string()]);
+    }
+
+    #[test]
+    fn test_punctuation_does_not_break_phrases() {
+        assert_eq!(
+            parse_query("hampir terancam,").iucn,
+            Some("NT".to_string())
+        );
+        assert_eq!(
+            parse_query("punah di alam!").iucn,
+            Some("EW".to_string())
+        );
+    }
+
+    #[test]
+    fn test_multiword_iucn_phrases() {
+        assert_eq!(parse_query("hampir terancam").iucn, Some("NT".to_string()));
+        assert_eq!(parse_query("risiko rendah").iucn, Some("LC".to_string()));
+        assert_eq!(parse_query("kurang data").iucn, Some("DD".to_string()));
+        assert_eq!(parse_query("near threatened").iucn, Some("NT".to_string()));
+        assert_eq!(parse_query("least concern").iucn, Some("LC".to_string()));
+        assert_eq!(parse_query("data deficient").iucn, Some("DD".to_string()));
+    }
+
+    #[test]
+    fn test_extinct_in_the_wild_is_not_extinct() {
+        let filters = parse_query("punah di alam");
+        assert_eq!(filters.iucn, Some("EW".to_string()));
+        assert!(filters.free_text.is_empty());
+
+        let english = parse_query("extinct in the wild");
+        assert_eq!(english.iucn, Some("EW".to_string()));
+        assert!(english.free_text.is_empty());
+    }
+
+    #[test]
+    fn test_natural_language_aliases_match_prefixed_form() {
+        assert_eq!(parse_query("menyusui").class, Some("Mammalia".to_string()));
+        assert_eq!(parse_query("melata").class, Some("Reptilia".to_string()));
+        assert_eq!(
+            parse_query("konifer").class,
+            Some("Pinopsida".to_string())
+        );
+        assert_eq!(
+            parse_query("kelas:menyusui").class,
+            Some("Mammalia".to_string())
+        );
+        assert_eq!(
+            parse_query("laba laba").class,
+            Some("Arachnida".to_string())
+        );
+    }
+
+    #[test]
+    fn test_status_prefix_falls_back_to_protection() {
+        let filters = parse_query("status:dilindungi");
+        assert_eq!(filters.p106, Some("Dilindungi".to_string()));
+        assert_eq!(filters.iucn, None);
     }
 
     #[test]
