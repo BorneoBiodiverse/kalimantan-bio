@@ -190,8 +190,67 @@ pub fn calculate_relationship(
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// let result = explore_relationships(&species, &query, &weights)?;
+/// ```
+/// use kalimantanbio_shared::core::Species;
+/// use species_relationships::explore_relationships;
+/// use species_relationships::types::{RelationshipQuery, ScoreWeights};
+///
+/// # fn species(id: u64, genus: &str, habitat: &str) -> Species {
+/// #     serde_json::from_value(serde_json::json!({
+/// #         "id": id,
+/// #         "scientific_name": "Species synthetica",
+/// #         "common_name": "Synthetic species",
+/// #         "description": "",
+/// #         "species_type": "native",
+/// #         "iucn": "-",
+/// #         "cites": "-",
+/// #         "p106": "-",
+/// #         "is_verified": true,
+/// #         "image_url": null,
+/// #         "taxonomy": {
+/// #             "kingdom": "animalia",
+/// #             "kingdom_id": 1,
+/// #             "phylum_division": "chordata",
+/// #             "phylum_division_id": 2,
+/// #             "class": "mammalia",
+/// #             "class_id": 3,
+/// #             "order": "primates",
+/// #             "order_id": 4,
+/// #             "family": "hominidae",
+/// #             "family_id": 5,
+/// #             "genus": genus,
+/// #             "genus_id": 6
+/// #         },
+/// #         "habitats": [habitat],
+/// #         "characteristics": ["woody"],
+/// #         "observation_count": 0,
+/// #         "recorded_individuals_total": 0,
+/// #         "latest_observation_year": null,
+/// #         "created_at": "2026-01-01T00:00:00Z",
+/// #         "updated_at": "2026-01-01T00:00:00Z"
+/// #     }))
+/// #     .unwrap()
+/// # }
+/// let input = vec![species(1, "pongo", "wetland"), species(2, "pongo", "wetland")];
+/// let query = RelationshipQuery {
+///     species_id: 1,
+///     min_score: 0.0,
+///     limit: 10,
+///     required_basis: None,
+/// };
+/// let weights = ScoreWeights {
+///     taxonomy: 0.5,
+///     habitat: 0.3,
+///     characteristic: 0.2,
+/// };
+///
+/// let result = explore_relationships(&input, &query, &weights).expect("valid query");
+/// assert_eq!(result.center_id, 1);
+/// assert_eq!(result.scoring_version, "relationship-v1");
+/// // star graph: k rekomendasi -> k + 1 node dan k edge, selalu satu pusat
+/// assert_eq!(result.network.nodes.len(), result.related.len() + 1);
+/// assert_eq!(result.network.edges.len(), result.related.len());
+/// assert!(result.network.nodes.iter().any(|node| node.is_center));
 /// ```
 pub fn explore_relationships(
     input: &[Species],
