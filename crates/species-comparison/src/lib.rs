@@ -160,6 +160,64 @@ fn build_observations_map(
         })
         .collect()
 }
+
+/// Score geographic overlap using the shared Jaccard helper.
+///
+/// Delegates to [`kalimantanbio_shared::collections::jaccard_similarity`];
+/// this module owns no separate set-similarity formula.
+///
+/// # Arguments
+///
+/// * `kabupaten_a` - Distinct regency ids for the first species.
+/// * `kabupaten_b` - Distinct regency ids for the second species.
+///
+/// # Returns
+///
+/// A score in `0.0..=1.0`. If either set is empty, returns `0.0`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let a = HashSet::from([6201, 6202]);
+/// let b = HashSet::from([6201]);
+/// assert_eq!(score_distribution(&a, &b), 0.5);
+/// ```
+fn score_distribution(kabupaten_a: &HashSet<u64>, kabupaten_b: &HashSet<u64>) -> f64 {
+    kalimantanbio_shared::collections::jaccard_similarity(kabupaten_a, kabupaten_b)
+}
+
+/// Score equality of species types after shared text normalization.
+///
+/// Uses [`kalimantanbio_shared::text::normalize_text`] on both values so
+/// case and extra whitespace do not affect equality. No local normalizer
+/// or special missing-value rule is applied: two normalized empty strings
+/// are equal, while an empty string and a nonempty string are not.
+///
+/// # Arguments
+///
+/// * `a` - First species.
+/// * `b` - Second species.
+///
+/// # Returns
+///
+/// `1.0` when the normalized types are equal, otherwise `0.0`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // a.species_type = " Endemic ", b.species_type = "endemic"
+/// assert_eq!(score_species_type(&a, &b), 1.0);
+/// ```
+fn score_species_type(a: &Species, b: &Species) -> f64 {
+    if kalimantanbio_shared::text::normalize_text(&a.species_type)
+        == kalimantanbio_shared::text::normalize_text(&b.species_type)
+    {
+        1.0
+    } else {
+        0.0
+    }
+}
+
 /// Compute the similarity between two species across all dimensions.
 ///
 /// # Arguments
@@ -257,6 +315,75 @@ mod tests {
             kabupaten_name: String::from("test regency"),
             province_name: String::from("test province"),
         }
+    }
+
+    #[test]
+    fn species_type_scores_normalized_equality() {
+        let species = fixture_species();
+        let mut a = species[0].clone();
+        let mut b = species[1].clone();
+        let cases = [
+            ("Endemic", "Endemic", 1.0),
+            ("Endemic", "eNdEmIc", 1.0),
+            (" \tEndemic\n", "endemic", 1.0),
+            ("  Pongo  PYGMAEUS ", "pongo pygmaeus", 1.0),
+            ("Endemic", "Native", 0.0),
+            ("", "", 1.0),
+            (" \t\n", "", 1.0),
+            ("", "Endemic", 0.0),
+        ];
+
+        cases.iter().for_each(|&(type_a, type_b, expected)| {
+            a.species_type = type_a.to_string();
+            b.species_type = type_b.to_string();
+            let original_a = a.clone();
+            let original_b = b.clone();
+
+            assert_eq!(
+                score_species_type(&a, &b),
+                expected,
+                "species types {type_a:?} vs {type_b:?}"
+            );
+            assert_eq!(score_species_type(&b, &a), expected);
+            assert_eq!(a, original_a);
+            assert_eq!(b, original_b);
+        });
+    }
+
+    #[test]
+    fn distribution_identical_sets_score_one() {
+        let a = HashSet::from([6201, 6202]);
+        let b = HashSet::from([6202, 6201]);
+        assert_eq!(score_distribution(&a, &b), 1.0);
+    }
+
+    #[test]
+    fn distribution_disjoint_sets_score_zero() {
+        let a = HashSet::from([6201]);
+        let b = HashSet::from([6271]);
+        assert_eq!(score_distribution(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn distribution_half_overlap_scores_half() {
+        let a = HashSet::from([6201, 6202]);
+        let b = HashSet::from([6201]);
+        assert_eq!(score_distribution(&a, &b), 0.5);
+        assert_eq!(score_distribution(&b, &a), 0.5);
+    }
+
+    #[test]
+    fn distribution_both_empty_score_zero() {
+        let empty = HashSet::new();
+        assert_eq!(score_distribution(&empty, &empty), 0.0);
+    }
+
+    #[test]
+    fn distribution_one_empty_scores_zero_in_either_order() {
+        let empty = HashSet::new();
+        let filled = HashSet::from([6201]);
+        assert_eq!(score_distribution(&empty, &filled), 0.0);
+        assert_eq!(score_distribution(&filled, &empty), 0.0);
     }
 
     #[test]
