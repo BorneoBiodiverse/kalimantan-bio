@@ -18,6 +18,44 @@ fn load_species_fixtures() -> Vec<Species> {
 }
 
 #[test]
+fn test_structured_queries_return_positive_scores() {
+    let all_species = load_species_fixtures();
+
+    for query in [
+        "mamalia",
+        "tumbuhan",
+        "endemik",
+        "terverifikasi",
+        "cites:appendix-i",
+        "mamalia kritis dilindungi",
+    ] {
+        let results = species_search::search(query, &all_species);
+        assert!(!results.is_empty(), "query '{query}' harus menghasilkan");
+        for (species, score) in &results {
+            assert!(
+                *score > 0.0 && *score <= 1.0,
+                "query '{query}': skor {} tidak valid untuk {}",
+                score,
+                species.scientific_name
+            );
+        }
+    }
+}
+
+#[test]
+fn test_scores_are_sorted_descending() {
+    let all_species = load_species_fixtures();
+
+    for query in ["orangutan", "ape", "borneo", "mamalia kritis"] {
+        let results = species_search::search(query, &all_species);
+        assert!(
+            results.windows(2).all(|pair| pair[0].1 >= pair[1].1),
+            "query '{query}' harus terurut menurun"
+        );
+    }
+}
+
+#[test]
 fn test_punctuation_does_not_change_results() {
     let all_species = load_species_fixtures();
 
