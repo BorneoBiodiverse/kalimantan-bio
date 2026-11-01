@@ -46,7 +46,7 @@ pub(crate) fn explain_relationship(
 fn format_dimension_explanation(evidence: &AttributeEvidence, weights: &ScoreWeights) -> String {
     match evidence.attribute {
         AttributeKind::Taxonomy => {
-            let weight = weights.taxonomy;
+            let weight = weights.weight(AttributeKind::Taxonomy);
             match evidence.similarity {
                 Some(sim) if sim > FLOAT_TOLERANCE => {
                     let contrib = sim * weight;
@@ -72,39 +72,29 @@ fn format_dimension_explanation(evidence: &AttributeEvidence, weights: &ScoreWei
             }
         }
         AttributeKind::Habitat => {
-            let weight = weights.habitat;
-            match evidence.similarity {
-                Some(sim) if sim > FLOAT_TOLERANCE => {
-                    let contrib = sim * weight;
-                    let list = evidence.shared_values.join(", ");
-
-                    format!("Memiliki habitat yang sama: {list}. Kontribusi habitat {contrib:.2}.")
-                }
-                Some(_) => {
-                    "Tidak ada habitat bersama; kontribusi habitat 0.00.".to_string()
-                }
-                None => {
-                    "Data habitat belum tersedia pada salah satu atau kedua spesies; dimensi habitat tidak menambah skor.".to_string()
-                }
-            }
+            format_set_explanation("habitat", evidence, weights.weight(AttributeKind::Habitat))
         }
-        AttributeKind::Characteristic => {
-            let weight = weights.characteristic;
-            match evidence.similarity {
-                Some(sim) if sim > FLOAT_TOLERANCE => {
-                    let contrib = sim * weight;
-                    let list = evidence.shared_values.join(", ");
+        AttributeKind::Characteristic => format_set_explanation(
+            "karakteristik",
+            evidence,
+            weights.weight(AttributeKind::Characteristic),
+        ),
+    }
+}
 
-                    format!("Memiliki karakteristik yang sama: {list}. Kontribusi karakteristik {contrib:.2}.")
-                }
-                Some(_) => {
-                    "Tidak ada karakteristik bersama; kontribusi karakteristik 0.00.".to_string()
-                }
-                None => {
-                    "Data karakteristik belum tersedia pada salah satu atau kedua spesies; dimensi karakteristik tidak menambah skor.".to_string()
-                }
-            }
+/// Memformat penjelasan untuk dimensi bukti yang dibandingkan sebagai himpunan nilai.
+fn format_set_explanation(label: &str, evidence: &AttributeEvidence, weight: f64) -> String {
+    match evidence.similarity {
+        Some(sim) if sim > FLOAT_TOLERANCE => {
+            let contrib = sim * weight;
+            let list = evidence.shared_values.join(", ");
+
+            format!("Memiliki {label} yang sama: {list}. Kontribusi {label} {contrib:.2}.")
         }
+        Some(_) => format!("Tidak ada {label} bersama; kontribusi {label} 0.00."),
+        None => format!(
+            "Data {label} belum tersedia pada salah satu atau kedua spesies; dimensi {label} tidak menambah skor."
+        ),
     }
 }
 

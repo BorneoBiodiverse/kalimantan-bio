@@ -140,7 +140,7 @@ pub(crate) fn score_evidence(
             continue;
         };
 
-        let weight = weight_for(kind, weights);
+        let weight = weights.weight(kind);
         contributions.push((similarity, weight));
         coverage += weight;
     }
@@ -149,15 +149,6 @@ pub(crate) fn score_evidence(
         total: combine_weighted_scores(&contributions),
         coverage,
         evidence: evidence.to_vec(),
-    }
-}
-
-/// Mengambil bobot untuk satu dimensi bukti.
-fn weight_for(kind: AttributeKind, weights: &ScoreWeights) -> f64 {
-    match kind {
-        AttributeKind::Taxonomy => weights.taxonomy,
-        AttributeKind::Habitat => weights.habitat,
-        AttributeKind::Characteristic => weights.characteristic,
     }
 }
 

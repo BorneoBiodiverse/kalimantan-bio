@@ -121,11 +121,7 @@ pub use crate::types::SpeciesId;
 /// let habitats_a: HashSet<String> = ["wetland".to_string()].into_iter().collect();
 /// let habitats_b = habitats_a.clone();
 ///
-/// let weights = ScoreWeights {
-///     taxonomy: 0.5,
-///     habitat: 0.3,
-///     characteristic: 0.2,
-/// };
+/// let weights = ScoreWeights::default();
 ///
 /// let score = calculate_relationship(&a, &b, &habitats_a, &habitats_b, &weights)?;
 /// assert!((score.total - 1.0).abs() < 1e-9);
@@ -238,11 +234,7 @@ pub fn calculate_relationship(
 ///     limit: 10,
 ///     required_basis: None,
 /// };
-/// let weights = ScoreWeights {
-///     taxonomy: 0.5,
-///     habitat: 0.3,
-///     characteristic: 0.2,
-/// };
+/// let weights = ScoreWeights::default();
 ///
 /// let result = explore_relationships(&input, &query, &weights).expect("valid query");
 /// assert_eq!(result.center_id, 1);

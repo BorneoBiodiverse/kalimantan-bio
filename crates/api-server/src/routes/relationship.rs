@@ -125,11 +125,7 @@ pub async fn get_relationships(
         limit: params.limit.unwrap_or(50),
         required_basis,
     };
-    let weights = ScoreWeights {
-        taxonomy: 0.5,
-        habitat: 0.3,
-        characteristic: 0.2,
-    };
+    let weights = ScoreWeights::default();
 
     match species_relationships::explore_relationships(species, &query, &weights) {
         Ok(result) => Ok(Json(json!({ "status": "success", "data": result }))),
