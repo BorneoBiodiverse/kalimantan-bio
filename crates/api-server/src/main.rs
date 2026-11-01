@@ -36,6 +36,10 @@ pub fn build_router() -> Router {
             "/api/v1/search/recommendations",
             axum::routing::get(routes::search::recommend_queries),
         )
+        .route(
+            "/api/v1/search/parse",
+            axum::routing::get(routes::search::parse_search_query),
+        )
         // Module 2 — Species Relationship Explorer
         .route(
             "/api/v1/species/{id}/relationships",

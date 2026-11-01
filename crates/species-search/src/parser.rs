@@ -19,6 +19,16 @@ enum TokenKind {
     KingdomId(u64),
     /// Taxonomic class identifier.
     ClassId(u64),
+    /// Taxonomic kingdom name (e.g. "Animalia", "Plantae").
+    Kingdom(String),
+    /// Taxonomic class / category name (e.g. "Mammalia", "Reptilia", "Aves").
+    Class(String),
+    /// Taxonomic order name.
+    Order(String),
+    /// Taxonomic family name.
+    Family(String),
+    /// Taxonomic genus name.
+    Genus(String),
     /// Record verification status.
     IsVerified(bool),
     /// Free-text keyword.
@@ -45,7 +55,7 @@ fn normalize_iucn_code(val: &str) -> Option<String> {
         }
         "lc" | "least-concern" | "least_concern" | "risiko-rendah" => Some("LC".to_string()),
         "dd" | "data-deficient" | "data_deficient" | "kurang-data" => Some("DD".to_string()),
-        "ew" | "extinct-in-the-wild" => Some("EW".to_string()),
+        "ew" | "extinct-in-the-wild" | "punah-di-alam" => Some("EW".to_string()),
         "ex" | "extinct" | "punah" => Some("EX".to_string()),
         other if !other.is_empty() => Some(other.to_uppercase()),
         _ => None,
@@ -84,7 +94,7 @@ fn normalize_species_type(val: &str) -> Option<String> {
 fn normalize_p106(val: &str) -> Option<String> {
     match val.to_lowercase().as_str() {
         "dilindungi" | "protected" | "true" | "ya" => Some("Dilindungi".to_string()),
-        "tidak-dilindungi" | "tidak_dilindungi" | "unprotected" | "false" | "tidak" => {
+        "tidak-dilindungi" | "tidak_dilindungi" | "unprotected" | "false" | "tidak" | "bebas" => {
             Some("Tidak Dilindungi".to_string())
         }
         other if !other.is_empty() => Some(other.to_string()),
@@ -92,18 +102,113 @@ fn normalize_p106(val: &str) -> Option<String> {
     }
 }
 
+/// Maps a raw kingdom name (multilingual) to standard scientific name.
+fn normalize_kingdom(val: &str) -> Option<String> {
+    match val.to_lowercase().as_str() {
+        "hewan" | "satwa" | "fauna" | "binatang" | "animalia" | "animal" | "animals" => {
+            Some("Animalia".to_string())
+        }
+        "tumbuhan" | "tanaman" | "flora" | "pohon" | "plantae" | "plant" | "plants" => {
+            Some("Plantae".to_string())
+        }
+        "jamur" | "fungi" | "fungus" | "mushroom" | "mushrooms" => {
+            Some("Fungi".to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Maps a raw class / category name (multilingual) to standard scientific name.
+fn normalize_class(val: &str) -> Option<String> {
+    match val.to_lowercase().as_str() {
+        "mamalia" | "mammalia" | "mammal" | "mammals" | "menyusui" => {
+            Some("Mammalia".to_string())
+        }
+        "reptil" | "reptilia" | "reptile" | "reptiles" | "melata" => {
+            Some("Reptilia".to_string())
+        }
+        "aves" | "burung" | "unggas" | "bird" | "birds" => {
+            Some("Aves".to_string())
+        }
+        "amfibi" | "amphibia" | "amphibian" | "amphibians" => {
+            Some("Amphibia".to_string())
+        }
+        "ikan" | "pisces" | "fish" | "fishes" | "actinopterygii" => {
+            Some("Actinopterygii".to_string())
+        }
+        "serangga" | "insekta" | "insecta" | "insect" | "insects" => {
+            Some("Insecta".to_string())
+        }
+        "arachnida" | "arachnid" | "arachnids" | "laba-laba" | "labalaba" | "spider" | "spiders" => {
+            Some("Arachnida".to_string())
+        }
+        "magnoliopsida" | "dikotil" | "dicot" | "dicotyledon" => {
+            Some("Magnoliopsida".to_string())
+        }
+        "liliopsida" | "monokotil" | "monocot" | "monocotyledon" => {
+            Some("Liliopsida".to_string())
+        }
+        "pinopsida" | "konifer" | "conifer" | "gymnospermae" => {
+            Some("Pinopsida".to_string())
+        }
+        _ => None,
+    }
+}
+
 /// Parses a token with a known key-value prefix (e.g. `key:value`).
 fn parse_prefixed_token(prefix: &str, value: &str) -> Option<TokenKind> {
     match prefix.to_lowercase().as_str() {
-        "iucn" => normalize_iucn_code(value).map(TokenKind::Iucn),
-        "p106" | "protection" => normalize_p106(value).map(TokenKind::P106),
-        "type" | "species_type" | "origin" => {
+        "iucn" | "status" => normalize_iucn_code(value).map(TokenKind::Iucn),
+        "p106" | "protection" | "perlindungan" => normalize_p106(value).map(TokenKind::P106),
+        "type" | "species_type" | "origin" | "tipe" | "asal" => {
             normalize_species_type(value).map(TokenKind::SpeciesType)
         }
         "cites" => normalize_cites(value).map(TokenKind::Cites),
-        "kingdom_id" | "kingdom" => value.parse::<u64>().ok().map(TokenKind::KingdomId),
-        "class_id" | "class" => value.parse::<u64>().ok().map(TokenKind::ClassId),
-        "verified" | "is_verified" => match value.to_lowercase().as_str() {
+        "kingdom_id" => value.parse::<u64>().ok().map(TokenKind::KingdomId),
+        "class_id" => value.parse::<u64>().ok().map(TokenKind::ClassId),
+        "kingdom" | "kerajaan" => {
+            if let Ok(id) = value.parse::<u64>() {
+                Some(TokenKind::KingdomId(id))
+            } else if let Some(k) = normalize_kingdom(value) {
+                Some(TokenKind::Kingdom(k))
+            } else {
+                let mut c = value.chars();
+                Some(TokenKind::Kingdom(match c.next() {
+                    None => value.to_string(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                }))
+            }
+        }
+        "class" | "kelas" => {
+            if let Ok(id) = value.parse::<u64>() {
+                Some(TokenKind::ClassId(id))
+            } else if let Some(c) = normalize_class(value) {
+                Some(TokenKind::Class(c))
+            } else {
+                let mut c = value.chars();
+                Some(TokenKind::Class(match c.next() {
+                    None => value.to_string(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                }))
+            }
+        }
+        "kategori" | "category" => {
+            if let Some(c) = normalize_class(value) {
+                Some(TokenKind::Class(c))
+            } else if let Some(k) = normalize_kingdom(value) {
+                Some(TokenKind::Kingdom(k))
+            } else {
+                let mut c = value.chars();
+                Some(TokenKind::Class(match c.next() {
+                    None => value.to_string(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                }))
+            }
+        }
+        "order" | "ordo" => Some(TokenKind::Order(value.to_string())),
+        "family" | "famili" => Some(TokenKind::Family(value.to_string())),
+        "genus" => Some(TokenKind::Genus(value.to_string())),
+        "verified" | "is_verified" | "terverifikasi" => match value.to_lowercase().as_str() {
             "true" | "1" | "yes" | "ya" => Some(TokenKind::IsVerified(true)),
             "false" | "0" | "no" | "tidak" => Some(TokenKind::IsVerified(false)),
             _ => None,
@@ -124,19 +229,21 @@ fn classify_token(token: &str) -> TokenKind {
     // 2. Check for standalone known keywords
     let lower = token.to_lowercase();
     match lower.as_str() {
-        // IUCN status codes
-        "cr" | "kritis" => TokenKind::Iucn("CR".to_string()),
-        "en" => TokenKind::Iucn("EN".to_string()),
-        "vu" => TokenKind::Iucn("VU".to_string()),
-        "nt" => TokenKind::Iucn("NT".to_string()),
-        "lc" => TokenKind::Iucn("LC".to_string()),
-        "dd" => TokenKind::Iucn("DD".to_string()),
-        "ew" => TokenKind::Iucn("EW".to_string()),
-        "ex" => TokenKind::Iucn("EX".to_string()),
+        // IUCN status codes (multi-lang)
+        "cr" | "kritis" | "critically-endangered" | "critically_endangered" => {
+            TokenKind::Iucn("CR".to_string())
+        }
+        "en" | "genting" | "endangered" => TokenKind::Iucn("EN".to_string()),
+        "vu" | "rentan" | "vulnerable" => TokenKind::Iucn("VU".to_string()),
+        "nt" | "hampir-terancam" | "near-threatened" => TokenKind::Iucn("NT".to_string()),
+        "lc" | "risiko-rendah" | "least-concern" => TokenKind::Iucn("LC".to_string()),
+        "dd" | "kurang-data" | "data-deficient" => TokenKind::Iucn("DD".to_string()),
+        "ew" | "punah-di-alam" | "extinct-in-the-wild" => TokenKind::Iucn("EW".to_string()),
+        "ex" | "punah" | "extinct" => TokenKind::Iucn("EX".to_string()),
 
-        // Protection status (P.106)
+        // Protection status (P.106 multi-lang)
         "dilindungi" | "protected" => TokenKind::P106("Dilindungi".to_string()),
-        "tidak-dilindungi" | "tidak_dilindungi" | "unprotected" => {
+        "tidak-dilindungi" | "tidak_dilindungi" | "unprotected" | "bebas" => {
             TokenKind::P106("Tidak Dilindungi".to_string())
         }
 
@@ -144,6 +251,46 @@ fn classify_token(token: &str) -> TokenKind {
         "endemik" | "endemic" => TokenKind::SpeciesType("Endemic".to_string()),
         "asli" | "native" => TokenKind::SpeciesType("Native".to_string()),
         "introduksi" | "introduced" => TokenKind::SpeciesType("Introduced".to_string()),
+
+        // Categories & Classes (Natural Language multi-lang)
+        "mamalia" | "mammalia" | "mammal" | "mammals" => {
+            TokenKind::Class("Mammalia".to_string())
+        }
+        "reptil" | "reptilia" | "reptile" | "reptiles" => {
+            TokenKind::Class("Reptilia".to_string())
+        }
+        "aves" | "burung" | "unggas" | "bird" | "birds" => {
+            TokenKind::Class("Aves".to_string())
+        }
+        "amfibi" | "amphibia" | "amphibian" | "amphibians" => {
+            TokenKind::Class("Amphibia".to_string())
+        }
+        "ikan" | "pisces" | "fish" | "fishes" | "actinopterygii" => {
+            TokenKind::Class("Actinopterygii".to_string())
+        }
+        "serangga" | "insekta" | "insecta" | "insect" | "insects" => {
+            TokenKind::Class("Insecta".to_string())
+        }
+        "arachnida" | "arachnid" | "arachnids" | "laba-laba" | "labalaba" | "spider" | "spiders" => {
+            TokenKind::Class("Arachnida".to_string())
+        }
+        "magnoliopsida" | "dikotil" => TokenKind::Class("Magnoliopsida".to_string()),
+        "liliopsida" | "monokotil" => TokenKind::Class("Liliopsida".to_string()),
+        "pinopsida" | "konifer" => TokenKind::Class("Pinopsida".to_string()),
+
+        // Kingdoms (Natural Language multi-lang)
+        "hewan" | "satwa" | "fauna" | "binatang" | "animalia" | "animal" | "animals" => {
+            TokenKind::Kingdom("Animalia".to_string())
+        }
+        "tumbuhan" | "tanaman" | "flora" | "pohon" | "plantae" | "plant" | "plants" => {
+            TokenKind::Kingdom("Plantae".to_string())
+        }
+        "jamur" | "fungi" | "fungus" | "mushroom" | "mushrooms" => {
+            TokenKind::Kingdom("Fungi".to_string())
+        }
+
+        // Verification status
+        "terverifikasi" | "verified" => TokenKind::IsVerified(true),
 
         // Everything else is treated as free text
         _ => TokenKind::FreeText(token.to_string()),
@@ -159,15 +306,19 @@ fn apply_classification(mut filters: QueryFilters, kind: TokenKind) -> QueryFilt
         TokenKind::Cites(cites) => filters.cites = Some(cites),
         TokenKind::KingdomId(id) => filters.kingdom_id = Some(id),
         TokenKind::ClassId(id) => filters.class_id = Some(id),
+        TokenKind::Kingdom(k) => filters.kingdom = Some(k),
+        TokenKind::Class(c) => filters.class = Some(c),
+        TokenKind::Order(o) => filters.order = Some(o),
+        TokenKind::Family(f) => filters.family = Some(f),
+        TokenKind::Genus(g) => filters.genus = Some(g),
         TokenKind::IsVerified(verified) => filters.is_verified = Some(verified),
         TokenKind::FreeText(word) => filters.free_text.push(word),
     }
     filters
 }
 
-
-/// ```
-pub(crate) fn extract_filters(tokens: &[String]) -> QueryFilters {
+/// Extracts structured query filters from a slice of tokens.
+pub fn extract_filters(tokens: &[String]) -> QueryFilters {
     let final_state = tokens
         .iter()
         .map(|s| s.trim())
@@ -200,6 +351,29 @@ pub(crate) fn extract_filters(tokens: &[String]) -> QueryFilters {
     }
 
     filters
+}
+
+/// Parses a natural-language or structured raw query string into structured [`QueryFilters`].
+///
+/// # Arguments
+///
+/// * `raw_query` - The user-provided search text.
+///
+/// # Returns
+///
+/// A structured [`QueryFilters`] instance.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let filters = parse_query("mamalia kritis bekantan");
+/// assert_eq!(filters.class, Some("Mammalia".to_string()));
+/// assert_eq!(filters.iucn, Some("CR".to_string()));
+/// ```
+pub fn parse_query(raw_query: &str) -> QueryFilters {
+    let normalized = kalimantanbio_shared::text::normalize_text(raw_query);
+    let tokens = kalimantanbio_shared::text::tokenize(&normalized);
+    extract_filters(&tokens)
 }
 
 #[cfg(test)]
@@ -235,11 +409,43 @@ mod tests {
 
     #[test]
     fn test_extract_protection_dilindungi() {
-        let tokens = vec!["mamalia".to_string(), "dilindungi".to_string()];
+        let tokens = vec!["orangutan".to_string(), "dilindungi".to_string()];
         let filters = extract_filters(&tokens);
 
         assert_eq!(filters.p106, Some("Dilindungi".to_string()));
-        assert_eq!(filters.free_text, vec!["mamalia".to_string()]);
+        assert_eq!(filters.free_text, vec!["orangutan".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_category_mamalia() {
+        let tokens = vec!["mamalia".to_string(), "dilindungi".to_string()];
+        let filters = extract_filters(&tokens);
+
+        assert_eq!(filters.class, Some("Mammalia".to_string()));
+        assert_eq!(filters.p106, Some("Dilindungi".to_string()));
+        assert!(filters.free_text.is_empty());
+    }
+
+    #[test]
+    fn test_extract_kingdom_tumbuhan_dan_hewan() {
+        let filters_tumbuhan = parse_query("tumbuhan langka");
+        assert_eq!(filters_tumbuhan.kingdom, Some("Plantae".to_string()));
+        assert_eq!(filters_tumbuhan.free_text, vec!["langka".to_string()]);
+
+        let filters_hewan = parse_query("kategori:hewan bekantan");
+        assert_eq!(filters_hewan.kingdom, Some("Animalia".to_string()));
+        assert_eq!(filters_hewan.free_text, vec!["bekantan".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_multilang_burung_reptil() {
+        let filters_burung = parse_query("burung endemik");
+        assert_eq!(filters_burung.class, Some("Aves".to_string()));
+        assert_eq!(filters_burung.species_type, Some("Endemic".to_string()));
+
+        let filters_reptil = parse_query("reptil kritis");
+        assert_eq!(filters_reptil.class, Some("Reptilia".to_string()));
+        assert_eq!(filters_reptil.iucn, Some("CR".to_string()));
     }
 
     #[test]
@@ -251,8 +457,9 @@ mod tests {
         ];
         let filters = extract_filters(&tokens);
 
+        assert_eq!(filters.class, Some("Aves".to_string()));
         assert_eq!(filters.p106, Some("Tidak Dilindungi".to_string()));
-        assert_eq!(filters.free_text, vec!["burung".to_string()]);
+        assert!(filters.free_text.is_empty());
     }
 
     #[test]
@@ -320,6 +527,14 @@ mod tests {
         assert_eq!(filters.iucn, None);
         assert_eq!(filters.p106, None);
         assert_eq!(filters.species_type, None);
+    }
+
+    #[test]
+    fn test_extract_arachnid() {
+        let tokens = vec!["arachnid".to_string(), "hutan".to_string()];
+        let filters = extract_filters(&tokens);
+        assert_eq!(filters.class, Some("Arachnida".to_string()));
+        assert_eq!(filters.free_text, vec!["hutan".to_string()]);
     }
 }
 

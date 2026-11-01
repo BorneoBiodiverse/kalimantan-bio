@@ -97,3 +97,22 @@ pub async fn recommend_queries(Query(params): Query<SearchParams>) -> Json<Value
         },
     }))
 }
+
+/// `GET /api/v1/search/parse`
+///
+/// Parses a query string into structured [`species_search::types::QueryFilters`].
+///
+/// # Arguments
+///
+/// * `params` - Search query parameters.
+///
+/// # Returns
+///
+/// A JSON response with parsed filter criteria.
+pub async fn parse_search_query(Query(params): Query<SearchParams>) -> Json<Value> {
+    let filters = species_search::parse_query(&params.q);
+    Json(json!({
+        "status": "success",
+        "data": filters,
+    }))
+}

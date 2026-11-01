@@ -11,10 +11,13 @@
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
 pub mod types;
-pub(crate) mod parser;
+pub mod parser;
 pub(crate) mod filter;
 pub(crate) mod scoring;
 pub(crate) mod recommendation;
+
+pub use parser::parse_query;
+pub use types::QueryFilters;
 
 use kalimantanbio_shared::{
     core::Species,

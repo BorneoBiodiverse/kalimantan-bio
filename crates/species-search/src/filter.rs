@@ -38,6 +38,26 @@ pub(crate) fn matches_taxonomy(species: &Species, filters: &QueryFilters) -> boo
         && filters
             .class_id
             .map_or(true, |id| species.taxonomy.class_id == id)
+        && filters
+            .kingdom
+            .as_ref()
+            .map_or(true, |k| eq_ci(&species.taxonomy.kingdom, k))
+        && filters
+            .class
+            .as_ref()
+            .map_or(true, |c| eq_ci(&species.taxonomy.class, c))
+        && filters
+            .order
+            .as_ref()
+            .map_or(true, |o| eq_ci(&species.taxonomy.order, o))
+        && filters
+            .family
+            .as_ref()
+            .map_or(true, |f| eq_ci(&species.taxonomy.family, f))
+        && filters
+            .genus
+            .as_ref()
+            .map_or(true, |g| eq_ci(&species.taxonomy.genus, g))
 }
 
 /// Checks whether a species matches conservation status criteria.

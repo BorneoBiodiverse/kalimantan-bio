@@ -3,11 +3,13 @@
 //! Provides the structured representation of search filters ([`QueryFilters`])
 //! and relevance scoring weights ([`ScoringWeights`]).
 
+use serde::{Deserialize, Serialize};
+
 /// Parsed criteria for filtering and scoring species records.
 ///
 /// Created by the query parser (Stage 1) and consumed by both
 /// the multi-attribute filter (Stage 2) and the relevance scorer (Stage 3).
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct QueryFilters {
     /// Free-text keywords matched against scientific names, common names, and descriptions.
     pub free_text: Vec<String>,
@@ -15,6 +17,16 @@ pub struct QueryFilters {
     pub kingdom_id: Option<u64>,
     /// Optional filter for taxonomic class ID.
     pub class_id: Option<u64>,
+    /// Optional filter for taxonomic kingdom name (e.g. "Animalia", "Plantae").
+    pub kingdom: Option<String>,
+    /// Optional filter for taxonomic class/category name (e.g. "Mammalia", "Reptilia", "Aves").
+    pub class: Option<String>,
+    /// Optional filter for taxonomic order name.
+    pub order: Option<String>,
+    /// Optional filter for taxonomic family name.
+    pub family: Option<String>,
+    /// Optional filter for taxonomic genus name.
+    pub genus: Option<String>,
     /// Optional IUCN Red List conservation status code (e.g. "CR", "EN", "VU").
     pub iucn: Option<String>,
     /// Optional CITES appendix designation (e.g. "Appendix I", "Appendix II").
@@ -31,7 +43,7 @@ pub struct QueryFilters {
 ///
 /// Weights are normalized so that their sum equals 1.0, matching the contract
 /// required by [`kalimantanbio_shared::scoring::combine_weighted_scores`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ScoringWeights {
     /// Relative weight assigned to free-text keyword match score (0.0 to 1.0).
     pub text_weight: f64,
