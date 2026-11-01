@@ -14,6 +14,7 @@
 
 pub(crate) mod stage1;
 pub(crate) mod stage2;
+pub(crate) mod stage3;
 pub(crate) mod stage4;
 pub mod types;
 
