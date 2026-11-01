@@ -101,7 +101,19 @@ pub fn calculate_taxonomy_similarity(a: &Taxonomy, b: &Taxonomy) -> f64 {
 /// println!("{path}");
 /// ```
 pub fn build_taxonomy_path(taxonomy: &Taxonomy) -> String {
-    todo!("shared taxonomy phase 3: build_taxonomy_path")
+    [
+        taxonomy.kingdom.as_str(),
+        taxonomy.phylum_division.as_str(),
+        taxonomy.class.as_str(),
+        taxonomy.order.as_str(),
+        taxonomy.family.as_str(),
+        taxonomy.genus.as_str(),
+    ]
+    .iter()
+    .map(|rank| rank.trim())
+    .filter(|rank| !rank.is_empty())
+    .collect::<Vec<_>>()
+    .join(" > ")
 }
 
 /// Get the highest taxonomic rank where two taxonomies match.
@@ -245,6 +257,31 @@ mod tests {
         assert_eq!(
             calculate_taxonomy_similarity(&a, &b),
             calculate_taxonomy_similarity(&b, &a)
+        );
+    }
+
+    #[test]
+    fn build_taxonomy_path_renders_full_pongo_breadcrumb() {
+        let taxonomy = Taxonomy {
+            kingdom: "Animalia".to_string(),
+            kingdom_id: 1,
+            phylum_division: "Chordata".to_string(),
+            phylum_division_id: 2,
+            class: "Mammalia".to_string(),
+            class_id: 3,
+            order: "Primates".to_string(),
+            order_id: 4,
+            family: "Hominidae".to_string(),
+            family_id: 5,
+            genus: "Pongo".to_string(),
+            genus_id: 6,
+        };
+
+        let path = build_taxonomy_path(&taxonomy);
+
+        assert_eq!(
+            path,
+            "Animalia > Chordata > Mammalia > Primates > Hominidae > Pongo"
         );
     }
 }

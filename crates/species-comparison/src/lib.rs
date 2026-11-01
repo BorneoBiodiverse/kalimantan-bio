@@ -15,11 +15,12 @@ pub mod types;
 use std::collections::{HashMap, HashSet};
 
 use kalimantanbio_shared::core::{Observation, Species};
+use kalimantanbio_shared::taxonomy::build_taxonomy_path;
 use kalimantanbio_shared::ValidationError;
 
 use crate::types::{
     ComparisonQuery, ComparisonResult, DataError, ModuleError, QueryError, ScoringWeights,
-    SimilarityScore,
+    SimilarityScore, SpeciesAttributeRow,
 };
 
 /// Minimum number of species a comparison must request.
@@ -160,6 +161,35 @@ fn build_observations_map(
         })
         .collect()
 }
+
+/// Builds a display row for one species.
+///
+/// The taxonomy breadcrumb comes from the shared renderer. It is display data,
+/// not Module 3's parent-to-children `build_taxonomy_map`.
+fn build_attribute_row(species: &Species, observations: &[&Observation]) -> SpeciesAttributeRow {
+    let mut kabupaten_list: Vec<String> = observations
+        .iter()
+        .map(|observation| observation.kabupaten_name.clone())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    kabupaten_list.sort();
+
+    SpeciesAttributeRow {
+        species_id: species.id,
+        scientific_name: species.scientific_name.clone(),
+        common_name: species.common_name.clone(),
+        taxonomy_path: build_taxonomy_path(&species.taxonomy),
+        species_type: species.species_type.clone(),
+        iucn: species.iucn.clone(),
+        cites: species.cites.clone(),
+        p106: species.p106.clone(),
+        observation_count: species.observation_count,
+        kabupaten_list,
+        is_verified: species.is_verified,
+    }
+}
+
 /// Compute the similarity between two species across all dimensions.
 ///
 /// # Arguments
@@ -418,6 +448,25 @@ mod tests {
             overlap,
             HashSet::from([6201]),
             "the Jaccard dimension needs a partial overlap, not an identical set"
+        );
+    }
+
+    #[test]
+    fn attribute_row_uses_shared_taxonomy_path_for_pongo() {
+        let species = fixture_species();
+        let observations = fixture_observations();
+
+        let pongo = species
+            .iter()
+            .find(|s| s.id == 1)
+            .expect("species 1 (Pongo pygmaeus) must exist");
+
+        let pongo_observations = fetch_observations_for_species(pongo.id, &observations);
+        let row = build_attribute_row(pongo, &pongo_observations);
+
+        assert_eq!(
+            row.taxonomy_path,
+            "Animalia > Chordata > Mammalia > Primates > Hominidae > Pongo"
         );
     }
 }
