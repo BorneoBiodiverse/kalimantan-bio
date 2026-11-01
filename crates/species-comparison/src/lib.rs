@@ -187,6 +187,48 @@ fn score_distribution(kabupaten_a: &HashSet<u64>, kabupaten_b: &HashSet<u64>) ->
     kalimantanbio_shared::collections::jaccard_similarity(kabupaten_a, kabupaten_b)
 }
 
+/// Average conservation-status similarity across IUCN, CITES, and P106.
+///
+/// Each field follows the card's listed order: identical values score `1.0`,
+/// otherwise a `"-"` on either side scores `0.5`, otherwise `0.0`.
+/// Equality is checked first, so `"-"` compared with `"-"` scores `1.0`.
+/// Values are compared exactly, without text normalization.
+///
+/// # Arguments
+///
+/// * `a` - First species.
+/// * `b` - Second species.
+///
+/// # Returns
+///
+/// The arithmetic mean of the three field scores, in `0.0..=1.0`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Identical conservation fields yield a full match.
+/// assert_eq!(score_conservation(&species, &species), 1.0);
+/// ```
+fn score_conservation(a: &Species, b: &Species) -> f64 {
+    [
+        (a.iucn.as_str(), b.iucn.as_str()),
+        (a.cites.as_str(), b.cites.as_str()),
+        (a.p106.as_str(), b.p106.as_str()),
+    ]
+    .into_iter()
+    .map(|(left, right)| {
+        if left == right {
+            1.0
+        } else if left == "-" || right == "-" {
+            0.5
+        } else {
+            0.0
+        }
+    })
+    .sum::<f64>()
+        / 3.0
+}
+
 /// Score equality of species types after shared text normalization.
 ///
 /// Uses [`kalimantanbio_shared::text::normalize_text`] on both values so
@@ -344,6 +386,80 @@ mod tests {
             kabupaten_name: String::from("test regency"),
             province_name: String::from("test province"),
         }
+    }
+
+    fn species_with_conservation(values: [&str; 3]) -> Species {
+        let mut species = fixture_species().remove(0);
+        species.iucn = values[0].to_string();
+        species.cites = values[1].to_string();
+        species.p106 = values[2].to_string();
+        species
+    }
+
+    #[test]
+    fn conservation_identical_known_fields_score_one() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let b = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+
+        assert_eq!(score_conservation(&a, &b), 1.0);
+    }
+
+    #[test]
+    fn conservation_different_known_fields_score_zero() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let b = species_with_conservation(["LC", "II", "Tidak Dilindungi"]);
+
+        assert_eq!(score_conservation(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn conservation_unknown_against_known_scores_half_in_either_order() {
+        let unknown = species_with_conservation(["-", "-", "-"]);
+        let known = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+
+        assert_eq!(score_conservation(&unknown, &known), 0.5);
+        assert_eq!(score_conservation(&known, &unknown), 0.5);
+    }
+
+    #[test]
+    fn conservation_identical_unknown_fields_follow_equality_first() {
+        let a = species_with_conservation(["-", "-", "-"]);
+        let b = species_with_conservation(["-", "-", "-"]);
+
+        assert_eq!(score_conservation(&a, &b), 1.0);
+    }
+
+    #[test]
+    fn conservation_mixed_field_scores_are_averaged() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let b = species_with_conservation(["CR", "-", "Tidak Dilindungi"]);
+
+        assert_eq!(score_conservation(&a, &b), 0.5);
+    }
+
+    #[test]
+    fn conservation_each_field_contributes_one_third() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let cases = [
+            (["CR", "II", "Tidak Dilindungi"], 1.0 / 3.0),
+            (["LC", "Appendix I", "Tidak Dilindungi"], 1.0 / 3.0),
+            (["LC", "II", "Dilindungi"], 1.0 / 3.0),
+            (["-", "II", "Tidak Dilindungi"], 1.0 / 6.0),
+            (["LC", "-", "Tidak Dilindungi"], 1.0 / 6.0),
+            (["LC", "II", "-"], 1.0 / 6.0),
+        ];
+
+        cases.iter().for_each(|&(values, expected)| {
+            let b = species_with_conservation(values);
+            assert!(
+                (score_conservation(&a, &b) - expected).abs() < 1e-12,
+                "unexpected conservation score for {values:?}"
+            );
+            assert!(
+                (score_conservation(&b, &a) - expected).abs() < 1e-12,
+                "unexpected reverse conservation score for {values:?}"
+            );
+        });
     }
 
     #[test]
