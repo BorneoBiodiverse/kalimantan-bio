@@ -52,10 +52,7 @@ pub fn normalize_text(input: &str) -> String {
 /// // Returns: "Family Dipterocarpaceae"
 /// ```
 pub fn sanitize_label(input: &str) -> String {
-    input
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    input.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Tokenize text by whitespace.

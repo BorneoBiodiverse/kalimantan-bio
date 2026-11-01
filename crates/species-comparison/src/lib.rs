@@ -160,7 +160,6 @@ fn build_observations_map(
         })
         .collect()
 }
-
 /// Compute the similarity between two species across all dimensions.
 ///
 /// # Arguments

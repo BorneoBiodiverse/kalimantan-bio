@@ -12,8 +12,9 @@
 
 pub mod types;
 
-use crate::types::{CitationFormat, KnowledgeQuery, KnowledgeReport, ModuleError,
-    Publication, PublicationQuery};
+use crate::types::{
+    CitationFormat, KnowledgeQuery, KnowledgeReport, ModuleError, Publication, PublicationQuery,
+};
 
 /// Explore biodiversity knowledge across publications.
 ///
@@ -82,9 +83,6 @@ pub fn recommend_citations<'a>(
 /// ```rust,ignore
 /// let bibtex = export_citations(&publications, CitationFormat::Bibtex);
 /// ```
-pub fn export_citations(
-    items: &[Publication],
-    format: CitationFormat,
-) -> String {
+pub fn export_citations(items: &[Publication], format: CitationFormat) -> String {
     todo!("knowledge-citations phase 5: export_citations")
 }
