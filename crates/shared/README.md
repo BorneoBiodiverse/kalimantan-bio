@@ -2,7 +2,9 @@
 
 Shared library for the KalimantanBio workspace. Provides core domain types, shared utility functions, a database access layer, error types, and test fixtures. All module crates depend only on this crate.
 
-> **Status: interface scaffold — implementation pending.**
+> **Status: partially implemented.** Text normalization, counting, coverage,
+> timeline, ranking, top-N, and score-threshold helpers are implemented;
+> other functions remain scaffolds.
 
 ## Modules
 

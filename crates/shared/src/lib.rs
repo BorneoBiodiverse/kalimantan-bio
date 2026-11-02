@@ -7,8 +7,8 @@
 //!
 //! All modules depend on this crate. Module crates depend only on this crate.
 //!
-//! > **Status: interface scaffold.** Every `pub fn` is declared with rustdoc;
-//! > bodies are stubs (`todo!`) pending implementation. See `.github/AGENTS.md`.
+//! > **Status: partially implemented.** Core text normalization, statistics,
+//! > and ranking helpers are available; other functions remain scaffolds.
 
 pub mod collections;
 pub mod core;

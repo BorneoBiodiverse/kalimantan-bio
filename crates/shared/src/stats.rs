@@ -26,10 +26,11 @@ use std::hash::Hash;
 /// ```
 
 pub fn count_by_key<T, K: Hash + Eq>(items: &[T], key_fn: impl Fn(&T) -> K) -> HashMap<K, usize> {
-    items.iter().fold(HashMap::new(), |mut acc, item| {
-        *acc.entry(key_fn(item)).or_insert(0) += 1;
-        acc
-    })
+    let mut counts = HashMap::new();
+    for item in items {
+        *counts.entry(key_fn(item)).or_insert(0) += 1;
+    }
+    counts
 }
 
 /// Get a frequency distribution sorted by count (descending).
@@ -87,10 +88,10 @@ pub fn frequency_distribution<T, K: Hash + Eq + Clone>(
 /// ```
 pub fn calculate_coverage_percentage(available: usize, total: usize) -> f64 {
     if total == 0 {
-        0.0
-    } else {
-        (available as f64 / total as f64).clamp(0.0, 1.0)
+        return 0.0;
     }
+
+    available.min(total) as f64 / total as f64
 }
 
 /// Build a timeline: count items per year.
@@ -115,8 +116,9 @@ pub fn calculate_coverage_percentage(available: usize, total: usize) -> f64 {
 /// // Returns: {2020: 5, 2021: 8, 2022: 12, ...}
 /// ```
 pub fn build_timeline<T>(items: &[T], year_fn: impl Fn(&T) -> u16) -> BTreeMap<u16, usize> {
-    items.iter().fold(BTreeMap::new(), |mut acc, item| {
-        *acc.entry(year_fn(item)).or_insert(0) += 1;
-        acc
-    })
+    let mut timeline = BTreeMap::new();
+    for item in items {
+        *timeline.entry(year_fn(item)).or_insert(0) += 1;
+    }
+    timeline
 }

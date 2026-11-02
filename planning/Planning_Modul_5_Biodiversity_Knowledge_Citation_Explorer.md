@@ -478,22 +478,22 @@ Prinsip yang digunakan:
 
 ## 14. Kriteria Selesai Modul
 
-* [ ] Data publikasi dapat diparse dari fixture lokal.
-* [ ] Data publikasi tervalidasi, dinormalisasi, dan dideduplikasi.
-* [ ] Species-to-publication explorer berjalan.
-* [ ] Research topic explorer berjalan.
-* [ ] Research location explorer berjalan.
-* [ ] Species research timeline dapat dihasilkan.
-* [ ] Research coverage analysis dapat membandingkan entitas.
-* [ ] Understudied species explorer menghasilkan hasil berdasarkan threshold yang terdokumentasi.
-* [ ] Citation recommendation menghasilkan ranking deterministik.
-* [ ] Citation export mendukung minimal APA dan BibTeX.
-* [ ] Knowledge network menghasilkan node dan edge yang valid.
-* [ ] Setiap fungsi inti memiliki unit test.
-* [ ] Interface publik (`pub fn explore_knowledge`) didefinisikan jelas dan teruji — lihat Bagian 17.
-* [ ] Seluruh `pub fn` memiliki dokumentasi rustdoc lengkap.
-* [ ] Pipeline dapat berjalan tanpa service eksternal menggunakan dummy fixture.
-* [ ] Adapter sumber publikasi dapat diuji secara terpisah dari fungsi murni.
+* [x] Data publikasi dapat diparse dari fixture lokal.
+* [x] Data publikasi tervalidasi, dinormalisasi, dan dideduplikasi.
+* [x] Species-to-publication explorer berjalan.
+* [x] Research topic explorer berjalan.
+* [x] Research location explorer berjalan.
+* [x] Species research timeline dapat dihasilkan.
+* [x] Research coverage analysis dapat membandingkan entitas.
+* [x] Understudied species explorer menghasilkan hasil berdasarkan threshold yang terdokumentasi.
+* [x] Citation recommendation menghasilkan ranking deterministik.
+* [x] Citation export mendukung minimal APA dan BibTeX.
+* [x] Knowledge network menghasilkan node dan edge yang valid.
+* [x] Setiap fungsi inti memiliki unit test.
+* [x] Interface publik (`pub fn explore_knowledge`) didefinisikan jelas dan teruji — lihat Bagian 17.
+* [x] Seluruh `pub fn` memiliki dokumentasi rustdoc lengkap.
+* [x] Pipeline dapat berjalan tanpa service eksternal menggunakan dummy fixture.
+* [x] Adapter sumber publikasi dapat diuji secara terpisah dari fungsi murni.
 
 ---
 
@@ -724,3 +724,4 @@ must preserve missing DOI/URL metadata as missing rather than inventing
 bibliographic values. The runtime dependency remains
 `kalimantanbio-shared` only; serialization is limited to module-owned types
 and `tokio` is test-only.
+
