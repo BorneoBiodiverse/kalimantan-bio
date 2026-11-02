@@ -396,12 +396,8 @@ mod tests {
 
     #[test]
     fn test_validate_weights_valid() {
-        let weights = ScoreWeights {
-            taxonomy: 0.50,
-            habitat: 0.30,
-            characteristic: 0.20,
-        };
-        assert!(validate_weights(&weights).is_ok());
+        // Bobot default pipeline A5 adalah konfigurasi valid yang dipakai produksi.
+        assert!(validate_weights(&ScoreWeights::default()).is_ok());
     }
 
     #[test]

@@ -28,6 +28,28 @@ pub struct ScoreWeights {
     pub characteristic: f64,
 }
 
+impl Default for ScoreWeights {
+    /// Bobot pipeline A5: taksonomi `0.50`, habitat `0.30`, karakteristik `0.20`.
+    fn default() -> Self {
+        Self {
+            taxonomy: 0.5,
+            habitat: 0.3,
+            characteristic: 0.2,
+        }
+    }
+}
+
+impl ScoreWeights {
+    /// Bobot untuk satu dimensi bukti.
+    pub(crate) fn weight(&self, kind: AttributeKind) -> f64 {
+        match kind {
+            AttributeKind::Taxonomy => self.taxonomy,
+            AttributeKind::Habitat => self.habitat,
+            AttributeKind::Characteristic => self.characteristic,
+        }
+    }
+}
+
 /// Query for relationship exploration.
 #[derive(Debug, Clone, Serialize)]
 pub struct RelationshipQuery {
