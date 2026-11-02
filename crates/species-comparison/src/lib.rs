@@ -10,6 +10,7 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub(crate) mod attributes;
 pub(crate) mod matrix;
 pub mod types;
 
