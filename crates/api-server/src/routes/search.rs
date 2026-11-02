@@ -15,12 +15,29 @@ pub struct SearchParams {
     pub limit: Option<usize>,
 }
 
-/// Helper to lazily load species fixtures from the shared library.
+/// Helper to lazily load species fixtures from the shared library and portal sync dataset.
 fn load_species_fixtures() -> &'static [Species] {
     static FIXTURES: std::sync::OnceLock<Vec<Species>> = std::sync::OnceLock::new();
     FIXTURES.get_or_init(|| {
-        let data = include_str!("../../../shared/fixtures/species.json");
-        serde_json::from_str(data).expect("Valid species fixtures JSON")
+        let base_data = include_str!("../../../shared/fixtures/species.json");
+        let mut list: Vec<Species> =
+            serde_json::from_str(base_data).expect("Valid baseline species fixtures JSON");
+
+        // Merge supplemental portal species (synced with Django portal database)
+        let portal_data = include_str!("../../fixtures/portal_species.json");
+        if let Ok(portal_species) = serde_json::from_str::<Vec<Species>>(portal_data) {
+            for sp in portal_species {
+                if !list.iter().any(|existing| {
+                    existing
+                        .scientific_name
+                        .eq_ignore_ascii_case(&sp.scientific_name)
+                }) {
+                    list.push(sp);
+                }
+            }
+        }
+
+        list
     })
 }
 
