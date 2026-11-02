@@ -1,10 +1,8 @@
-//! Tahap 4 — Pembentukan Data Species Network.
+//! Network graph data assembly for species relationships.
 //!
-//! Mengubah rekomendasi [`RelatedSpecies`] menjadi graf domain murni
-//! ([`SpeciesNetwork`]) untuk API: satu node pusat + node tetangga unik +
-//! edge pusat-tetangga. Tanpa koordinat layout, tanpa HTML/CSS.
-
-#![allow(dead_code)]
+//! Converts recommended [`RelatedSpecies`] into pure domain graph data
+//! structures ([`SpeciesNetwork`]): center node, unique related nodes,
+//! and connecting edges without UI/layout coupling.
 
 use std::collections::HashSet;
 
@@ -16,7 +14,7 @@ use crate::types::{
 };
 
 /// Versi aturan scoring yang dicatat pada hasil.
-const SCORING_VERSION: &str = "relationship-v1";
+pub(crate) const SCORING_VERSION: &str = "relationship-v1";
 
 /// Membuat node dengan ID stabil, label nama ilmiah, dan penanda pusat.
 pub(crate) fn make_node(species: &Species, is_center: bool) -> NetworkNode {

@@ -1270,6 +1270,7 @@ dependencies = [
  "kalimantanbio-shared",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
 ]
 
