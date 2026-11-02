@@ -270,7 +270,6 @@ pub enum ModuleError {
     /// A requested entity was not found.
     NotFound(String),
 }
-
 impl std::fmt::Display for ModuleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

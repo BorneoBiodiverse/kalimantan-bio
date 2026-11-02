@@ -15,11 +15,12 @@ pub mod types;
 use std::collections::{HashMap, HashSet};
 
 use kalimantanbio_shared::core::{Observation, Species};
+use kalimantanbio_shared::taxonomy::build_taxonomy_path;
 use kalimantanbio_shared::ValidationError;
 
 use crate::types::{
     ComparisonQuery, ComparisonResult, DataError, ModuleError, QueryError, ScoringWeights,
-    SimilarityScore,
+    SimilarityScore, SpeciesAttributeRow,
 };
 
 /// Minimum number of species a comparison must request.
@@ -161,6 +162,133 @@ fn build_observations_map(
         .collect()
 }
 
+/// Score geographic overlap using the shared Jaccard helper.
+///
+/// Delegates to [`kalimantanbio_shared::collections::jaccard_similarity`];
+/// this module owns no separate set-similarity formula.
+///
+/// # Arguments
+///
+/// * `kabupaten_a` - Distinct regency ids for the first species.
+/// * `kabupaten_b` - Distinct regency ids for the second species.
+///
+/// # Returns
+///
+/// A score in `0.0..=1.0`. If either set is empty, returns `0.0`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let a = HashSet::from([6201, 6202]);
+/// let b = HashSet::from([6201]);
+/// assert_eq!(score_distribution(&a, &b), 0.5);
+/// ```
+fn score_distribution(kabupaten_a: &HashSet<u64>, kabupaten_b: &HashSet<u64>) -> f64 {
+    kalimantanbio_shared::collections::jaccard_similarity(kabupaten_a, kabupaten_b)
+}
+
+/// Average conservation-status similarity across IUCN, CITES, and P106.
+///
+/// Each field follows the card's listed order: identical values score `1.0`,
+/// otherwise a `"-"` on either side scores `0.5`, otherwise `0.0`.
+/// Equality is checked first, so `"-"` compared with `"-"` scores `1.0`.
+/// Values are compared exactly, without text normalization.
+///
+/// # Arguments
+///
+/// * `a` - First species.
+/// * `b` - Second species.
+///
+/// # Returns
+///
+/// The arithmetic mean of the three field scores, in `0.0..=1.0`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Identical conservation fields yield a full match.
+/// assert_eq!(score_conservation(&species, &species), 1.0);
+/// ```
+fn score_conservation(a: &Species, b: &Species) -> f64 {
+    [
+        (a.iucn.as_str(), b.iucn.as_str()),
+        (a.cites.as_str(), b.cites.as_str()),
+        (a.p106.as_str(), b.p106.as_str()),
+    ]
+    .into_iter()
+    .map(|(left, right)| {
+        if left == right {
+            1.0
+        } else if left == "-" || right == "-" {
+            0.5
+        } else {
+            0.0
+        }
+    })
+    .sum::<f64>()
+        / 3.0
+}
+
+/// Score equality of species types after shared text normalization.
+///
+/// Uses [`kalimantanbio_shared::text::normalize_text`] on both values so
+/// case and extra whitespace do not affect equality. No local normalizer
+/// or special missing-value rule is applied: two normalized empty strings
+/// are equal, while an empty string and a nonempty string are not.
+///
+/// # Arguments
+///
+/// * `a` - First species.
+/// * `b` - Second species.
+///
+/// # Returns
+///
+/// `1.0` when the normalized types are equal, otherwise `0.0`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // a.species_type = " Endemic ", b.species_type = "endemic"
+/// assert_eq!(score_species_type(&a, &b), 1.0);
+/// ```
+fn score_species_type(a: &Species, b: &Species) -> f64 {
+    if kalimantanbio_shared::text::normalize_text(&a.species_type)
+        == kalimantanbio_shared::text::normalize_text(&b.species_type)
+    {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// Builds a display row for one species.
+///
+/// The taxonomy breadcrumb comes from the shared renderer. It is display data,
+/// not Module 3's parent-to-children `build_taxonomy_map`.
+fn build_attribute_row(species: &Species, observations: &[&Observation]) -> SpeciesAttributeRow {
+    let mut kabupaten_list: Vec<String> = observations
+        .iter()
+        .map(|observation| observation.kabupaten_name.clone())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    kabupaten_list.sort();
+
+    SpeciesAttributeRow {
+        species_id: species.id,
+        scientific_name: species.scientific_name.clone(),
+        common_name: species.common_name.clone(),
+        taxonomy_path: build_taxonomy_path(&species.taxonomy),
+        species_type: species.species_type.clone(),
+        iucn: species.iucn.clone(),
+        cites: species.cites.clone(),
+        p106: species.p106.clone(),
+        observation_count: species.observation_count,
+        kabupaten_list,
+        is_verified: species.is_verified,
+    }
+}
+
 /// Compute the similarity between two species across all dimensions.
 ///
 /// # Arguments
@@ -258,6 +386,149 @@ mod tests {
             kabupaten_name: String::from("test regency"),
             province_name: String::from("test province"),
         }
+    }
+
+    fn species_with_conservation(values: [&str; 3]) -> Species {
+        let mut species = fixture_species().remove(0);
+        species.iucn = values[0].to_string();
+        species.cites = values[1].to_string();
+        species.p106 = values[2].to_string();
+        species
+    }
+
+    #[test]
+    fn conservation_identical_known_fields_score_one() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let b = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+
+        assert_eq!(score_conservation(&a, &b), 1.0);
+    }
+
+    #[test]
+    fn conservation_different_known_fields_score_zero() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let b = species_with_conservation(["LC", "II", "Tidak Dilindungi"]);
+
+        assert_eq!(score_conservation(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn conservation_unknown_against_known_scores_half_in_either_order() {
+        let unknown = species_with_conservation(["-", "-", "-"]);
+        let known = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+
+        assert_eq!(score_conservation(&unknown, &known), 0.5);
+        assert_eq!(score_conservation(&known, &unknown), 0.5);
+    }
+
+    #[test]
+    fn conservation_identical_unknown_fields_follow_equality_first() {
+        let a = species_with_conservation(["-", "-", "-"]);
+        let b = species_with_conservation(["-", "-", "-"]);
+
+        assert_eq!(score_conservation(&a, &b), 1.0);
+    }
+
+    #[test]
+    fn conservation_mixed_field_scores_are_averaged() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let b = species_with_conservation(["CR", "-", "Tidak Dilindungi"]);
+
+        assert_eq!(score_conservation(&a, &b), 0.5);
+    }
+
+    #[test]
+    fn conservation_each_field_contributes_one_third() {
+        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
+        let cases = [
+            (["CR", "II", "Tidak Dilindungi"], 1.0 / 3.0),
+            (["LC", "Appendix I", "Tidak Dilindungi"], 1.0 / 3.0),
+            (["LC", "II", "Dilindungi"], 1.0 / 3.0),
+            (["-", "II", "Tidak Dilindungi"], 1.0 / 6.0),
+            (["LC", "-", "Tidak Dilindungi"], 1.0 / 6.0),
+            (["LC", "II", "-"], 1.0 / 6.0),
+        ];
+
+        cases.iter().for_each(|&(values, expected)| {
+            let b = species_with_conservation(values);
+            assert!(
+                (score_conservation(&a, &b) - expected).abs() < 1e-12,
+                "unexpected conservation score for {values:?}"
+            );
+            assert!(
+                (score_conservation(&b, &a) - expected).abs() < 1e-12,
+                "unexpected reverse conservation score for {values:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn species_type_scores_normalized_equality() {
+        let species = fixture_species();
+        let mut a = species[0].clone();
+        let mut b = species[1].clone();
+        let cases = [
+            ("Endemic", "Endemic", 1.0),
+            ("Endemic", "eNdEmIc", 1.0),
+            (" \tEndemic\n", "endemic", 1.0),
+            ("  Pongo  PYGMAEUS ", "pongo pygmaeus", 1.0),
+            ("Endemic", "Native", 0.0),
+            ("", "", 1.0),
+            (" \t\n", "", 1.0),
+            ("", "Endemic", 0.0),
+        ];
+
+        cases.iter().for_each(|&(type_a, type_b, expected)| {
+            a.species_type = type_a.to_string();
+            b.species_type = type_b.to_string();
+            let original_a = a.clone();
+            let original_b = b.clone();
+
+            assert_eq!(
+                score_species_type(&a, &b),
+                expected,
+                "species types {type_a:?} vs {type_b:?}"
+            );
+            assert_eq!(score_species_type(&b, &a), expected);
+            assert_eq!(a, original_a);
+            assert_eq!(b, original_b);
+        });
+    }
+
+    #[test]
+    fn distribution_identical_sets_score_one() {
+        let a = HashSet::from([6201, 6202]);
+        let b = HashSet::from([6202, 6201]);
+        assert_eq!(score_distribution(&a, &b), 1.0);
+    }
+
+    #[test]
+    fn distribution_disjoint_sets_score_zero() {
+        let a = HashSet::from([6201]);
+        let b = HashSet::from([6271]);
+        assert_eq!(score_distribution(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn distribution_half_overlap_scores_half() {
+        let a = HashSet::from([6201, 6202]);
+        let b = HashSet::from([6201]);
+        assert_eq!(score_distribution(&a, &b), 0.5);
+        assert_eq!(score_distribution(&b, &a), 0.5);
+    }
+
+    #[test]
+    fn distribution_both_empty_score_zero() {
+        let empty = HashSet::new();
+        assert_eq!(score_distribution(&empty, &empty), 0.0);
+    }
+
+    #[test]
+    fn distribution_one_empty_scores_zero_in_either_order() {
+        let empty = HashSet::new();
+        let filled = HashSet::from([6201]);
+        assert_eq!(score_distribution(&empty, &filled), 0.0);
+        assert_eq!(score_distribution(&filled, &empty), 0.0);
     }
 
     #[test]
@@ -419,6 +690,25 @@ mod tests {
             overlap,
             HashSet::from([6201]),
             "the Jaccard dimension needs a partial overlap, not an identical set"
+        );
+    }
+
+    #[test]
+    fn attribute_row_uses_shared_taxonomy_path_for_pongo() {
+        let species = fixture_species();
+        let observations = fixture_observations();
+
+        let pongo = species
+            .iter()
+            .find(|s| s.id == 1)
+            .expect("species 1 (Pongo pygmaeus) must exist");
+
+        let pongo_observations = fetch_observations_for_species(pongo.id, &observations);
+        let row = build_attribute_row(pongo, &pongo_observations);
+
+        assert_eq!(
+            row.taxonomy_path,
+            "Animalia > Chordata > Mammalia > Primates > Hominidae > Pongo"
         );
     }
 }

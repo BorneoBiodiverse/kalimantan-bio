@@ -77,5 +77,5 @@ pub fn sanitize_label(input: &str) -> String {
 /// // Returns: vec!["orangutan", "kalimantan"]
 /// ```
 pub fn tokenize(text: &str) -> Vec<String> {
-    todo!("shared text phase 3: tokenize")
+    text.split_whitespace().map(|s| s.to_string()).collect()
 }

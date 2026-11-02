@@ -26,12 +26,65 @@ pub fn calculate_pair_similarity(
 | Component | Source | Shared helper |
 |-----------|--------|---------------|
 | `taxonomy_score` | Perbandingan `Taxonomy` a vs b | `calculate_taxonomy_similarity` |
-| `conservation_score` | Status IUCN / CITES | internal `score_conservation` |
+| `conservation_score` | Status IUCN / CITES / P106 | internal `score_conservation` |
 | `type_score` | `species_type` a vs b | internal `score_species_type` |
-| `distribution_score` | Overlap kabupaten | `jaccard_similarity` |
+| `distribution_score` | Overlap kabupaten | private `score_distribution` → shared `collections::jaccard_similarity` |
 | `total_score` | Weighted combination | `combine_weighted_scores` |
 
-## Flow
+## Distribution wrapper
+
+`score_distribution(&HashSet<u64>, &HashSet<u64>) -> f64` sudah
+menggunakan `kalimantanbio_shared::collections::jaccard_similarity` secara
+langsung. Rumus dan penanganan set kosong tetap milik shared library;
+Module 4 tidak membuat implementasi Jaccard kedua atau API publik baru.
+
+Tes unit pada wrapper mencakup set identik (`1.0`), terpisah (`0.0`),
+intersection berukuran 1 dari union berukuran 2 (`0.5`), kedua set kosong,
+dan satu set kosong dalam kedua urutan argumen (`0.0`).
+
+Wrapper ini belum dihubungkan ke `calculate_pair_similarity` maupun
+`compare_species`; kedua entry point tersebut masih berupa stub.
+
+## Conservation scoring
+
+Fungsi private `score_conservation(a: &Species, b: &Species) -> f64`
+membandingkan tiga field: `iucn`, `cites`, dan `p106`. Aturan diterapkan
+sesuai urutan yang tertulis pada kartu Trello *Score conservation and
+species type* dan planning §7:
+
+1. Nilai identik menghasilkan `1.0`.
+2. Jika tidak identik tetapi salah satu bernilai `"-"`, hasilnya `0.5`.
+3. Nilai lainnya yang berbeda menghasilkan `0.0`.
+
+Kesamaan diperiksa lebih dahulu, sehingga `"-"` vs `"-"` menghasilkan
+`1.0`. Field dibandingkan persis, tanpa normalisasi teks. Skor akhir adalah
+`(skor_iucn + skor_cites + skor_p106) / 3.0`; tidak memakai bobot dimensi
+konservasi `0.30` di sini karena pembobotan milik tahap penggabungan skor.
+
+Enam tes mencakup nilai diketahui yang identik/berbeda, unknown vs known
+pada kedua urutan, unknown yang identik, rata-rata campuran, dan kontribusi
+masing-masing field secara terpisah. Fungsi belum dihubungkan ke entry
+point publik yang masih stub.
+
+## Species type scoring
+
+Fungsi private `score_species_type(a: &Species, b: &Species) -> f64`
+membandingkan kedua field `species_type` setelah memanggil
+`kalimantanbio_shared::text::normalize_text`. Hasilnya `1.0` jika sama,
+atau `0.0` jika berbeda. Normalisasi tetap milik shared library: huruf
+besar/kecil diabaikan, whitespace tepi dihapus, dan whitespace berulang
+dirapatkan.
+
+Sesuai aturan kesamaan, dua nilai kosong (termasuk whitespace-only)
+menghasilkan `1.0`; nilai kosong dibanding tipe yang terisi menghasilkan
+`0.0`. Tidak ada aturan khusus untuk data kosong yang ditambahkan.
+
+Tes mencakup nilai identik, mixed case, whitespace, contoh normalisasi
+`"  Pongo  PYGMAEUS "`, tipe berbeda, serta input kosong. Skor diuji dalam
+kedua urutan argumen dan data spesies tidak diubah. Fungsi ini belum
+dihubungkan ke entry point publik yang masih stub.
+
+## Flow (intended composition)
 
 ```mermaid
 flowchart TD
@@ -55,7 +108,8 @@ println!("{} <-> {}: {:.2}", score.species_a_id, score.species_b_id, score.total
 
 ## TODO
 
-- [ ] Detail rumus `score_conservation` dan `score_species_type`
+- [x] Detail rumus `score_species_type`
+- [x] Detail rumus `score_conservation`
 - [ ] Batas nilai skor (normalisasi 0..=1)
 - [ ] Edge cases: himpunan kabupaten kosong, bobot tidak valid
 - [ ] Contoh nyata dengan fixture `shared/fixtures/`

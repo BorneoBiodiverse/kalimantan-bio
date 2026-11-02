@@ -57,6 +57,46 @@ Root workspace `Cargo.toml`: `resolver = "2"`, edition 2021, workspace deps:
 - `tower-http` (0.5, `cors`)
 - `thiserror` (1)
 
+## File and Module Convention
+
+All crates follow a **domain/feature-oriented** Rust module layout. Code is
+grouped by domain capability rather than by technical concern, so each feature
+lives together and the crate's public API surface is obvious from its module
+declarations.
+
+### Crate directory layout
+
+```text
+crates/
+└── <crate-name>/
+    ├── Cargo.toml
+    ├── README.md
+    ├── AGENTS.md
+    ├── src/
+    │   ├── lib.rs              # crate root (bin crates use main.rs)
+    │   ├── types.rs            # public domain types
+    │   ├── error.rs            # public error types
+    │   ├── <feature>.rs        # a single-feature module (file form)
+    │   └── <feature>/          # a feature with subfeatures (directory form)
+    │       ├── mod.rs          # feature module declaration + re-exports
+    │       └── <subfeature>.rs
+    ├── tests/                  # integration tests
+    └── fixtures/               # test data (JSON, etc.)
+```
+
+### Module declaration rules
+
+- **Crate root:** `lib.rs` for library crates, `main.rs` for binary crates (`api-server`). Every crate root sets `#![warn(missing_docs)]`.
+- **`types.rs`:** holds the crate's public domain types. Every public type and every public field has a rustdoc comment.
+- **`error.rs`:** holds the crate's public error enums. Every enum and variant has a rustdoc comment.
+- **Feature modules:** group code by domain capability (for example `taxonomy`, `collections`, `scoring`, `text`, `validation`, `stats`, `db` in `shared`; `filter`, `parser`, `recommendation`, `scoring` in `species-search`).
+- **File form:** a feature that is a single module is declared in `lib.rs` as `pub mod <feature>;` (or `pub(crate) mod <feature>;` when internal-only) and lives in `src/<feature>.rs`.
+- **Directory form:** a feature with subfeatures is a directory `src/<feature>/` containing `mod.rs` plus one `src/<feature>/<subfeature>.rs` file per subfeature. `mod.rs` declares the submodules and re-exports the public API.
+- **Visibility:** `pub` for the crate-root API surface and re-exports; `pub(crate)` for helpers shared across modules inside the crate; fully `private` (`mod` / `fn` with no visibility modifier) for helpers used within a single module only.
+- **rustdoc:** every `pub fn`, `pub struct`, `pub enum`, and public field is documented (summary, `# Arguments`, `# Returns`, `# Example` as `rust,ignore` code blocks). Doc examples are `rust,ignore`-tagged while bodies are stubs.
+- **Stub bodies:** each declared `pub fn` keeps its exact planned signature and a single stub body: `todo!("<crate> <phase>: <function_name>")`. Do not implement domain logic.
+- **Tests and fixtures:** `tests/` holds integration tests; `fixtures/` holds shared test data (JSON).
+
 ## Stub body convention
 
 Declared functions keep their **exact planned signature**; the body is a single stub:

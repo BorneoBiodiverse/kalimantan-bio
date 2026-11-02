@@ -24,6 +24,7 @@ use std::hash::Hash;
 /// ```rust,ignore
 /// let counts = count_by_key(&species, |s| s.taxonomy.family.clone());
 /// ```
+
 pub fn count_by_key<T, K: Hash + Eq>(items: &[T], key_fn: impl Fn(&T) -> K) -> HashMap<K, usize> {
     let mut counts = HashMap::new();
     for item in items {
@@ -57,7 +58,10 @@ pub fn frequency_distribution<T, K: Hash + Eq + Clone>(
     items: &[T],
     key_fn: impl Fn(&T) -> K,
 ) -> Vec<(K, usize)> {
-    todo!("shared stats phase 3: frequency_distribution")
+    let counts = count_by_key(items, key_fn);
+    let mut dist: Vec<(K, usize)> = counts.into_iter().collect();
+    dist.sort_by(|a, b| b.1.cmp(&a.1));
+    dist
 }
 
 /// Calculate coverage percentage (0.0 - 1.0).

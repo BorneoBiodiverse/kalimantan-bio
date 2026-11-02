@@ -384,6 +384,8 @@ The shared library (`kalimantanbio-shared`) provides:
 #### 5.2.1 Species
 
 ```rust
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -399,6 +401,8 @@ pub struct Species {
     pub is_verified: bool,
     pub image_url: Option<String>,
     pub taxonomy: Taxonomy,
+    pub habitats: HashSet<String>,        // controlled vocabulary; empty = unavailable
+    pub characteristics: HashSet<String>, // e.g. "growth_form:tree"; empty = unavailable
     pub observation_count: u32,
     pub recorded_individuals_total: u32,
     pub latest_observation_year: Option<u32>,
@@ -477,7 +481,7 @@ pub struct Observation {
 
 ```rust
 /// Calculate taxonomy similarity score (0.0 - 1.0)
-/// Scoring: genus=1.0, family=0.8, order=0.6, class=0.4, phylum=0.2, kingdom=0.1
+/// Scoring: genus=1.0, family=0.6, order=0.3, otherwise 0.0 (higher ranks ignored; empty labels skipped)
 pub fn calculate_taxonomy_similarity(a: &Taxonomy, b: &Taxonomy) -> f64
 
 /// Build taxonomy path string: "Kingdom > Phylum > Class > Order > Family > Genus"
