@@ -10,17 +10,17 @@
 //!
 //! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
+pub(crate) mod matrix;
 pub mod types;
 
 use std::collections::{HashMap, HashSet};
 
 use kalimantanbio_shared::core::{Observation, Species};
-use kalimantanbio_shared::taxonomy::build_taxonomy_path;
 use kalimantanbio_shared::ValidationError;
 
 use crate::types::{
     ComparisonQuery, ComparisonResult, DataError, ModuleError, QueryError, ScoringWeights,
-    SimilarityScore, SpeciesAttributeRow,
+    SimilarityScore,
 };
 
 /// Minimum number of species a comparison must request.
@@ -74,7 +74,7 @@ fn validate_query(query: &ComparisonQuery) -> Result<(), QueryError> {
 ///
 /// Borrowed references to the matched species, or [`DataError::SpeciesNotFound`]
 /// carrying the first id that has no match.
-fn fetch_species_by_ids<'a>(
+pub(crate) fn fetch_species_by_ids<'a>(
     ids: &[u64],
     all_species: &'a [Species],
 ) -> Result<Vec<&'a Species>, DataError> {
@@ -102,10 +102,10 @@ fn fetch_species_by_ids<'a>(
 /// # Returns
 ///
 /// Borrowed references to the matching observations, possibly empty.
-fn fetch_observations_for_species<'a>(
+fn fetch_observations_for_species(
     species_id: u64,
-    all_observations: &'a [Observation],
-) -> Vec<&'a Observation> {
+    all_observations: &[Observation],
+) -> Vec<&Observation> {
     all_observations
         .iter()
         .filter(|observation| observation.species_id == species_id)
@@ -261,34 +261,6 @@ fn score_species_type(a: &Species, b: &Species) -> f64 {
     }
 }
 
-/// Builds a display row for one species.
-///
-/// The taxonomy breadcrumb comes from the shared renderer. It is display data,
-/// not Module 3's parent-to-children `build_taxonomy_map`.
-fn build_attribute_row(species: &Species, observations: &[&Observation]) -> SpeciesAttributeRow {
-    let mut kabupaten_list: Vec<String> = observations
-        .iter()
-        .map(|observation| observation.kabupaten_name.clone())
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-    kabupaten_list.sort();
-
-    SpeciesAttributeRow {
-        species_id: species.id,
-        scientific_name: species.scientific_name.clone(),
-        common_name: species.common_name.clone(),
-        taxonomy_path: build_taxonomy_path(&species.taxonomy),
-        species_type: species.species_type.clone(),
-        iucn: species.iucn.clone(),
-        cites: species.cites.clone(),
-        p106: species.p106.clone(),
-        observation_count: species.observation_count,
-        kabupaten_list,
-        is_verified: species.is_verified,
-    }
-}
-
 /// Compute the similarity between two species across all dimensions.
 ///
 /// # Arguments
@@ -349,6 +321,7 @@ pub fn compare_species(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::matrix::*;
 
     /// The agreed shared fixture, so the module is tested against the same
     /// dataset every other module uses (planning: fixtures live in shared).

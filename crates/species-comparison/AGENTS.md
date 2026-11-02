@@ -113,81 +113,93 @@ boundary, so `compare_species` still returns a single public error type.
 
 ---
 
-## Rustdoc Requirements (§17.5)
+## Rustdoc & Verification Standards
 
-- `compare_species`, `calculate_pair_similarity` — complete docs
-- All public types in signatures: `ComparisonQuery`, `ComparisonResult`, `SimilarityScore`, `SpeciesAttributeRow`, `ScoringWeights`, `ModuleError`
+- `compare_species`, `calculate_pair_similarity` — complete rustdoc comments.
+- All public types in signatures must be documented: `ComparisonQuery`, `ComparisonResult`, `SimilarityScore`, `SpeciesAttributeRow`, `ScoringWeights`, `ModuleError`.
+- Doc examples must be tagged `rust,ignore` while bodies are stubs.
 
+Canonical verification commands for this crate:
 ```bash
-cargo doc -p species-comparison --no-deps --open
+cargo fmt -p species-comparison -- --check
 cargo check -p species-comparison
-cargo test -p species-comparison
-```
-
----
-
-## Pipeline Composition (§9)
-
-```rust
-fn compare_species(
-    query: &ComparisonQuery,
-    all_species: &[Species],
-    all_observations: &[Observation],
-) -> Result<ComparisonResult, ModuleError> {
-    validate_query(query)?;
-    let weights = ScoringWeights::default(); // 0.40 / 0.30 / 0.15 / 0.15
-    let species_list = fetch_species_by_ids(&query.species_ids, all_species)?;
-
-    let observations_map: HashMap<u64, HashSet<u64>> = species_list
-        .iter()
-        .map(|s| {
-            let obs = fetch_observations_for_species(s.id, all_observations);
-            let kabupaten_set = build_kabupaten_set(&obs);
-            (s.id, kabupaten_set)
-        })
-        .collect();
-
-    let attribute_matrix = build_attribute_matrix(&species_list, all_observations);
-
-    let shared_attributes = find_shared_attributes(&attribute_matrix);
-    let unique_attributes = find_unique_attributes(&attribute_matrix);
-    let distinguishing_characteristics = find_distinguishing_characteristics(&attribute_matrix);
-
-    let similarity_scores = calculate_all_pairs(&species_list, &observations_map, &weights);
-
-    let mut result = ComparisonResult {
-        query: query.clone(),
-        attribute_matrix,
-        shared_attributes,
-        unique_attributes,
-        distinguishing_characteristics,
-        similarity_scores,
-        summary: String::new(),
-    };
-    result.summary = generate_summary(&result);
-
-    Ok(result)
-}
-```
-
----
-
-## Verification
-
-```bash
-cargo check -p species-comparison
-cargo doc -p species-comparison --no-deps
 cargo test -p species-comparison
 cargo clippy -p species-comparison
+cargo doc -p species-comparison --no-deps
 ```
 
 ---
 
-## Stub Convention
+## Implementation Stages & Submodule Layout
 
-```rust
-todo!("species-comparison phase 5: compare_species")
-todo!("species-comparison phase 4: calculate_pair_similarity")
+Module 4 follows the domain/feature-oriented module layout across five incremental stages:
+
+| Stage | Focus | Primary Location | Key Functions |
+|:---|:---|:---|:---|
+| **Stage 1** | Query validation & data retrieval | `src/lib.rs` | `validate_query`, `fetch_species_by_ids`, `build_kabupaten_set`, `build_observations_map` |
+| **Stage 2** | Matrix assembly & attribute extraction | `src/matrix.rs` | `build_attribute_row`, `build_attribute_matrix`, `extract_attribute_values` |
+| **Stage 3** | Shared & unique attribute analysis | `src/attributes.rs` | `is_attribute_shared`, `find_shared_attributes`, `find_unique_attributes`, `find_distinguishing_characteristics` |
+| **Stage 4** | Similarity scoring & pairwise metrics | `src/scoring.rs` | `score_conservation`, `score_species_type`, `score_distribution`, `calculate_similarity_score`, `calculate_all_pairs`, `find_most_similar`, `calculate_pair_similarity` |
+| **Stage 5** | Summary generation & pipeline integration | `src/lib.rs` | `generate_summary`, `compare_species` |
+
+---
+
+## Agent Skills Integration
+
+Invoke these project skills from `.agents/skills/` during development:
+
+| Skill | Trigger | Expected Outcome |
+|:---|:---|:---|
+| `rust-best-practices` | Writing/refactoring functions, collections, data modeling. | Zero-copy references, minimal allocations (e.g. `BTreeSet<&str>`), idiomatic `Option`/`Result` usage. |
+| `tdd` / `rust-testing` | Implementing a stage or writing tests. | Red-Green-Refactor flow; edge-case coverage (empty inputs, missing observations) using shared fixtures. |
+| `systematic-debugging` | Test failure or compiler diagnostic. | Root-cause analysis before editing; zero speculative patches. |
+| `thermo-nuclear-code-quality-review` | **Mandatory before staging commits or creating PRs**. | Strict audit: search for code-judo simplifications, eliminate redundant branches/tables, keep files $< 1000$ LOC. |
+
+---
+
+## Pull Request Protocol & Review Standards
+
+### 1. Merge Gate & Branch Protection ("Protect Main")
+- Target branch is `main`.
+- Active GitHub ruleset `Protect Main` requires 1 approving review and `require_code_owner_review: true`.
+- In the absence of a `.github/CODEOWNERS` file, GitHub requires approval from an organization **`MEMBER`** (e.g. `@sleepymor`). Outside collaborator (`COLLABORATOR`) approvals do not unblock the merge gate.
+
+### 2. PR Lifecycle
+1. **Tracked Issue:** Create an issue via `gh issue create` before branching.
+2. **Branching:** Format feature branches as `module4/<type>/<short-description>`.
+3. **Atomic Commits:** Conventional Commits (`feat(species-comparison): ...`, `test(species-comparison): ...`).
+4. **Thermo-Nuclear Review:** Run `thermo-nuclear-code-quality-review` before proposing or staging commits.
+5. **No Autonomous Git Mutations:** All `git add`, `git commit`, and `git push` commands require explicit user consent.
+6. **Draft PR Creation:** Open a Draft PR targeting `main` with `gh pr create --draft`.
+
+### 3. High-Signal Pull Request Template
+Every PR description should follow this structured template:
+
+```markdown
+## Summary
+- <1-2 sentence overview of what this PR implements and why>
+- <Stage addressed: e.g. Stage 2 (Matrix Assembly) per Planning Doc §5>
+
+## Code-Judo & Structural Simplifications
+- <Highlight simplifications made: e.g. eliminated redundant lookup tables, unified column parsing, zero-copy borrowing>
+- <Files kept lean and modular under 1000 LOC>
+
+## Invariants & Design Adherence
+- [x] Exact planned public function signatures preserved per §17.2
+- [x] Zero cross-module crate dependencies (shared crate only)
+- [x] Internal helpers strictly encapsulated as `pub(crate)` or `private`
+- [x] Decoupled purity (no UI coordinates, HTML/CSS, or Django presentation)
+
+## Verification Proof
+- [x] Audited with `thermo-nuclear-code-quality-review`
+- [x] `cargo fmt -p species-comparison -- --check`
+- [x] `cargo check -p species-comparison`
+- [x] `cargo test -p species-comparison` (X passed, 0 failed)
+- [x] `cargo clippy -p species-comparison`
+- [x] `cargo doc -p species-comparison --no-deps`
+- [x] `git diff --check`
+
+## Related
+- Closes #<issue-number>
+- Planning Doc: `planning/Planning_Module_4_Comparative_Species_Explorer.md`
 ```
-
-Signatures must match planning §17.2 exactly.
