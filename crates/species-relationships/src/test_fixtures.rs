@@ -68,11 +68,7 @@ pub(crate) fn species(
 
 /// Bobot scoring default §5: taksonomi `0.50`, habitat `0.30`, karakteristik `0.20`.
 pub(crate) fn default_weights() -> ScoreWeights {
-    ScoreWeights {
-        taxonomy: 0.5,
-        habitat: 0.3,
-        characteristic: 0.2,
-    }
+    ScoreWeights::default()
 }
 
 /// Skenario 1 §15: empat spesies dengan data lengkap pada semua dimensi.

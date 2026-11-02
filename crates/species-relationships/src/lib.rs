@@ -8,9 +8,9 @@
 //! helpers (evidence extraction, scoring, explanation, network building) stay
 //! private.
 //!
-//! > **Status: partial implementation.** Stage 2 (evidence extraction and
-//! > relationship scoring) is implemented; the exploration pipeline and the
-//! > network stages are pending.
+//! > **Status: stages 1–5 composed.** All five stages are implemented and the
+//! > Tahap 5 pipeline `explore_relationships` runs end to end over a species
+//! > snapshot.
 
 pub(crate) mod stage1;
 pub(crate) mod stage2;
@@ -27,6 +27,7 @@ use kalimantanbio_shared::{
     core::Species, error::ValidationError, validation::validate_weights_sum_to_one,
 };
 
+use crate::stage1::{find_species, prepare_species, validate_query, validate_weights};
 use crate::stage2::{score_evidence, set_evidence, taxonomy_evidence};
 use crate::types::{
     AttributeKind, ExplorerError, ExplorerResult, RelationshipQuery, RelationshipScore,
@@ -120,11 +121,7 @@ pub use crate::types::SpeciesId;
 /// let habitats_a: HashSet<String> = ["wetland".to_string()].into_iter().collect();
 /// let habitats_b = habitats_a.clone();
 ///
-/// let weights = ScoreWeights {
-///     taxonomy: 0.5,
-///     habitat: 0.3,
-///     characteristic: 0.2,
-/// };
+/// let weights = ScoreWeights::default();
 ///
 /// let score = calculate_relationship(&a, &b, &habitats_a, &habitats_b, &weights)?;
 /// assert!((score.total - 1.0).abs() < 1e-9);
@@ -157,30 +154,111 @@ pub fn calculate_relationship(
 
 /// Explore all relationships around a center species.
 ///
-/// Pipeline: prepare → validate → discover candidates → score → explain →
-/// rank → build network → assemble result.
+/// Pipeline (planning §9): validate query and weights → prepare (normalize)
+/// the dataset → find the center → discover candidates → score and explain →
+/// rank and filter → build the network → assemble the result. Discovery and
+/// ranking delegate to the Tahap 3 helpers (`stage3`), network assembly to
+/// Tahap 4 (`stage4`).
 ///
 /// # Arguments
 ///
-/// * `input` - The full species dataset.
-/// * `query` - Center species, minimum score, and limit.
-/// * `weights` - Scoring weights.
+/// * `input` - The full species dataset (snapshot from the repository).
+/// * `query` - Center species, minimum score, limit, and optional required
+///   evidence basis.
+/// * `weights` - Scoring weights; must be finite, non-negative, and sum to
+///   `1.0` within tolerance `1e-9`.
 ///
 /// # Returns
 ///
-/// Related species with scores, explanations, and network data.
+/// [`ExplorerResult`] with related species (scores and explanations), the
+/// centered network, the weights used, and `scoring_version`. An empty result
+/// still contains the center node.
+///
+/// # Errors
+///
+/// * [`ExplorerError::InvalidQuery`] - `species_id` is `0`, `min_score` is
+///   outside `0.0..=1.0` or non-finite, or `limit` is outside `1..=50`.
+/// * [`ExplorerError::InvalidWeights`] - weights fail validation.
+/// * [`ExplorerError::InvalidDataset`] - duplicate IDs, ID `0`, or empty
+///   scientific name in the dataset.
+/// * [`ExplorerError::SpeciesNotFound`] - the center species is absent from
+///   the dataset.
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// let result = explore_relationships(&species, &query, &weights)?;
+/// ```
+/// use kalimantanbio_shared::core::Species;
+/// use species_relationships::explore_relationships;
+/// use species_relationships::types::{RelationshipQuery, ScoreWeights};
+///
+/// # fn species(id: u64, genus: &str, habitat: &str) -> Species {
+/// #     serde_json::from_value(serde_json::json!({
+/// #         "id": id,
+/// #         "scientific_name": "Species synthetica",
+/// #         "common_name": "Synthetic species",
+/// #         "description": "",
+/// #         "species_type": "native",
+/// #         "iucn": "-",
+/// #         "cites": "-",
+/// #         "p106": "-",
+/// #         "is_verified": true,
+/// #         "image_url": null,
+/// #         "taxonomy": {
+/// #             "kingdom": "animalia",
+/// #             "kingdom_id": 1,
+/// #             "phylum_division": "chordata",
+/// #             "phylum_division_id": 2,
+/// #             "class": "mammalia",
+/// #             "class_id": 3,
+/// #             "order": "primates",
+/// #             "order_id": 4,
+/// #             "family": "hominidae",
+/// #             "family_id": 5,
+/// #             "genus": genus,
+/// #             "genus_id": 6
+/// #         },
+/// #         "habitats": [habitat],
+/// #         "characteristics": ["woody"],
+/// #         "observation_count": 0,
+/// #         "recorded_individuals_total": 0,
+/// #         "latest_observation_year": null,
+/// #         "created_at": "2026-01-01T00:00:00Z",
+/// #         "updated_at": "2026-01-01T00:00:00Z"
+/// #     }))
+/// #     .unwrap()
+/// # }
+/// let input = vec![species(1, "pongo", "wetland"), species(2, "pongo", "wetland")];
+/// let query = RelationshipQuery {
+///     species_id: 1,
+///     min_score: 0.0,
+///     limit: 10,
+///     required_basis: None,
+/// };
+/// let weights = ScoreWeights::default();
+///
+/// let result = explore_relationships(&input, &query, &weights).expect("valid query");
+/// assert_eq!(result.center_id, 1);
+/// assert_eq!(result.scoring_version, "relationship-v1");
+/// // star graph: k rekomendasi -> k + 1 node dan k edge, selalu satu pusat
+/// assert_eq!(result.network.nodes.len(), result.related.len() + 1);
+/// assert_eq!(result.network.edges.len(), result.related.len());
+/// assert!(result.network.nodes.iter().any(|node| node.is_center));
 /// ```
 pub fn explore_relationships(
     input: &[Species],
     query: &RelationshipQuery,
     weights: &ScoreWeights,
 ) -> Result<ExplorerResult, ExplorerError> {
-    todo!("species-relationships phase 5: explore_relationships")
+    validate_query(query)?;
+    validate_weights(weights)?;
+
+    let species = prepare_species(input)?;
+    let center = find_species(&species, query.species_id)?;
+    let candidates = stage3::candidate_species(&species, &center.id);
+    let scored = stage3::score_candidates(center, &candidates, weights);
+    let related = stage3::rank_related(scored, query);
+
+    Ok(stage4::assemble_result(center, related, weights))
 }
 
 #[cfg(test)]
@@ -351,6 +429,98 @@ mod tests {
 
         assert_close(forward.total, backward.total);
         assert_close(forward.coverage, backward.coverage);
+    }
+
+    #[test]
+    fn pipeline_rejects_invalid_query_before_discovery() {
+        let query = RelationshipQuery {
+            species_id: 0,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+        let result = explore_relationships(&scenario_one(), &query, &default_weights());
+        assert!(matches!(result, Err(ExplorerError::InvalidQuery(_))));
+    }
+
+    #[test]
+    fn pipeline_rejects_invalid_weights_before_discovery() {
+        let query = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+        let bad = ScoreWeights {
+            taxonomy: 0.5,
+            habitat: 0.5,
+            characteristic: 0.5,
+        };
+        let result = explore_relationships(&scenario_one(), &query, &bad);
+        assert!(matches!(result, Err(ExplorerError::InvalidWeights)));
+    }
+
+    #[test]
+    fn pipeline_reports_unknown_center_before_discovery() {
+        let query = RelationshipQuery {
+            species_id: 999,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+        let result = explore_relationships(&scenario_one(), &query, &default_weights());
+        assert!(matches!(result, Err(ExplorerError::SpeciesNotFound(999))));
+    }
+
+    #[test]
+    fn pipeline_reports_invalid_dataset_before_discovery() {
+        let mut dataset = scenario_one();
+        dataset.push(dataset[0].clone());
+        let query = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+        let result = explore_relationships(&dataset, &query, &default_weights());
+        assert!(matches!(result, Err(ExplorerError::InvalidDataset(_))));
+    }
+
+    #[test]
+    fn pipeline_composes_discovery_into_network() {
+        let query = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+        let result = explore_relationships(&scenario_one(), &query, &default_weights())
+            .expect("valid query over scenario one must succeed");
+
+        assert_eq!(result.center_id, 1);
+        assert_eq!(result.scoring_version, "relationship-v1");
+        assert!(!result.related.is_empty(), "scenario one must rank peers");
+        assert_eq!(result.network.nodes.len(), result.related.len() + 1);
+        assert_eq!(result.network.edges.len(), result.related.len());
+        assert_eq!(
+            result
+                .network
+                .nodes
+                .iter()
+                .filter(|node| node.is_center)
+                .count(),
+            1
+        );
+        assert!(result
+            .network
+            .nodes
+            .iter()
+            .any(|node| node.id == 1 && node.is_center));
+        assert!(result
+            .network
+            .edges
+            .iter()
+            .all(|edge| edge.source == 1 && edge.target != 1));
     }
 
     #[test]

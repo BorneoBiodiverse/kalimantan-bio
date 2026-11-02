@@ -123,11 +123,7 @@ mod tests {
     }
 
     fn weights() -> ScoreWeights {
-        ScoreWeights {
-            taxonomy: 0.5,
-            habitat: 0.3,
-            characteristic: 0.2,
-        }
+        ScoreWeights::default()
     }
 
     #[test]
