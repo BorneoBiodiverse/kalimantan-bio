@@ -10,6 +10,29 @@ use std::collections::HashSet;
 
 use kalimantanbio_shared::core::Species;
 
+/// Score taxonomic similarity using the shared taxonomy helper.
+///
+/// This wrapper introduces no local scoring scale and does not compare
+/// the display-only taxonomy breadcrumb.
+///
+/// # Arguments
+///
+/// * `a` - First species.
+/// * `b` - Second species.
+///
+/// # Returns
+///
+/// The similarity score returned by the shared taxonomy helper.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let score = score_taxonomy(&species_a, &species_b);
+/// ```
+pub(crate) fn score_taxonomy(a: &Species, b: &Species) -> f64 {
+    kalimantanbio_shared::taxonomy::calculate_taxonomy_similarity(&a.taxonomy, &b.taxonomy)
+}
+
 /// Score geographic overlap using the shared Jaccard helper.
 ///
 /// Delegates to [`kalimantanbio_shared::collections::jaccard_similarity`];
@@ -246,5 +269,35 @@ mod tests {
         let empty = HashSet::new();
         assert_eq!(score_distribution(&populated, &empty), 0.0);
         assert_eq!(score_distribution(&empty, &populated), 0.0);
+    }
+
+    #[test]
+    fn taxonomy_same_genus_score_one() {
+        let species = fixture_species();
+        let a = species.iter().find(|s| s.id == 1).expect("Pongo pygmaeus");
+        let b = species.iter().find(|s| s.id == 3).expect("Pongo abelii");
+
+        assert_eq!(score_taxonomy(a, b), 1.0);
+    }
+
+    #[test]
+    fn taxonomy_same_family_only_scores_point_six() {
+        let species = fixture_species();
+        let a = species.iter().find(|s| s.id == 2).expect("Panthera tigris");
+        let b = species.iter().find(|s| s.id == 4).expect("Neofelis diardi");
+
+        assert_eq!(score_taxonomy(a, b), 0.6);
+    }
+
+    #[test]
+    fn taxonomy_no_similarity_scores_zero() {
+        let species = fixture_species();
+        let a = species.iter().find(|s| s.id == 1).expect("Pongo pygmaeus");
+        let b = species
+            .iter()
+            .find(|s| s.id == 5)
+            .expect("Rafflesia arnoldii");
+
+        assert_eq!(score_taxonomy(a, b), 0.0);
     }
 }
