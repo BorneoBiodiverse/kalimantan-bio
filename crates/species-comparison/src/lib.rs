@@ -12,257 +12,27 @@
 
 pub(crate) mod attributes;
 pub(crate) mod matrix;
+pub(crate) mod scoring;
 pub mod types;
+pub(crate) mod validation;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use kalimantanbio_shared::core::{Observation, Species};
-use kalimantanbio_shared::ValidationError;
 
-use crate::types::{
-    ComparisonQuery, ComparisonResult, DataError, ModuleError, QueryError, ScoringWeights,
-    SimilarityScore,
+pub use crate::types::{
+    ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights, SimilarityScore,
+    SpeciesAttributeRow,
+};
+pub(crate) use crate::validation::{
+    build_kabupaten_set, build_observations_map, fetch_observations_for_species,
+    fetch_species_by_ids, validate_query, MAX_SPECIES, MIN_SPECIES,
 };
 
-/// Minimum number of species a comparison must request.
-pub(crate) const MIN_SPECIES: usize = 2;
-
-/// Maximum number of species a comparison may request (this is the bound the
-/// module passes to the shared `validate_id_list`).
-pub(crate) const MAX_SPECIES: usize = 10;
-
-/// Reject a malformed comparison query before any species data is fetched.
-///
-/// The counting and duplicate rules come from the shared validation contract
-/// (`kalimantanbio_shared::validation::validate_id_list`), so this module never
-/// re-implements them. The shared error is translated into the module's own
-/// private [`QueryError`], which callers of the public API never see.
-///
-/// # Arguments
-///
-/// * `query` - The comparison query to validate.
-///
-/// # Returns
-///
-/// `Ok(())` for a query holding 2 to 10 distinct species ids, otherwise the
-/// matching [`QueryError`].
-fn validate_query(query: &ComparisonQuery) -> Result<(), QueryError> {
-    match kalimantanbio_shared::validation::validate_id_list(
-        &query.species_ids,
-        MIN_SPECIES,
-        MAX_SPECIES,
-    ) {
-        Ok(()) => Ok(()),
-        Err(ValidationError::TooFewItems { .. }) => Err(QueryError::TooFewSpecies),
-        Err(ValidationError::TooManyItems { .. }) => Err(QueryError::TooManySpecies),
-        Err(ValidationError::DuplicateIds) => Err(QueryError::DuplicateId),
-        Err(other) => unreachable!("validate_id_list cannot return {other}"),
-    }
-}
-
-/// Resolve the requested species ids against the provided dataset.
-///
-/// Reads only from the slice it is given — no implicit fetching, no database
-/// access (planning §19.4). The order of the result follows the order of
-/// `ids`, so the comparison matrix stays in the order the caller asked for.
-///
-/// # Arguments
-///
-/// * `ids` - The species ids to resolve, already validated by [`validate_query`].
-/// * `all_species` - The species dataset to look the ids up in.
-///
-/// # Returns
-///
-/// Borrowed references to the matched species, or [`DataError::SpeciesNotFound`]
-/// carrying the first id that has no match.
-pub(crate) fn fetch_species_by_ids<'a>(
-    ids: &[u64],
-    all_species: &'a [Species],
-) -> Result<Vec<&'a Species>, DataError> {
-    ids.iter()
-        .map(|id| {
-            all_species
-                .iter()
-                .find(|species| species.id == *id)
-                .ok_or(DataError::SpeciesNotFound(*id))
-        })
-        .collect()
-}
-
-/// Collect every observation record belonging to one species.
-///
-/// An empty result is **not** an error: a species may legitimately have no
-/// observations yet, and downstream distribution scoring already treats an
-/// empty regency set as a score of `0.0` (planning §15 edge cases).
-///
-/// # Arguments
-///
-/// * `species_id` - The species whose observations are wanted.
-/// * `all_observations` - The observation dataset to filter.
-///
-/// # Returns
-///
-/// Borrowed references to the matching observations, possibly empty.
-fn fetch_observations_for_species(
-    species_id: u64,
-    all_observations: &[Observation],
-) -> Vec<&Observation> {
-    all_observations
-        .iter()
-        .filter(|observation| observation.species_id == species_id)
-        .collect()
-}
-
-/// Collect the distinct regency (kabupaten) ids from one species' observations.
-///
-/// Several observations usually fall in the same regency, so the result is a
-/// set: ten sightings spread over two regencies collapse to a two-element set
-/// such as `{6201, 6202}`. That set is exactly what the geographic (Jaccard)
-/// dimension of pair scoring consumes.
-///
-/// # Arguments
-///
-/// * `observations` - The observations belonging to a single species.
-///
-/// # Returns
-///
-/// The distinct regency ids, empty when the species has no observations.
-fn build_kabupaten_set(observations: &[&Observation]) -> HashSet<u64> {
-    observations
-        .iter()
-        .map(|observation| observation.kabupaten_id)
-        .collect()
-}
-
-/// Map every selected species to the set of regencies it was observed in.
-///
-/// The pair-scoring stage needs one regency set per species; building them all
-/// in one pass keeps the pipeline from rescanning the observation dataset for
-/// every comparison.
-///
-/// # Arguments
-///
-/// * `species_list` - The species selected by the (already validated) query.
-/// * `all_observations` - The full observation dataset.
-///
-/// # Returns
-///
-/// A map from species id to its distinct regency ids. A species with no
-/// observations maps to an empty set rather than being omitted, so callers can
-/// look it up without a fallback branch.
-fn build_observations_map(
-    species_list: &[&Species],
-    all_observations: &[Observation],
-) -> HashMap<u64, HashSet<u64>> {
-    species_list
-        .iter()
-        .map(|species| {
-            let observations = fetch_observations_for_species(species.id, all_observations);
-            (species.id, build_kabupaten_set(&observations))
-        })
-        .collect()
-}
-
-/// Score geographic overlap using the shared Jaccard helper.
-///
-/// Delegates to [`kalimantanbio_shared::collections::jaccard_similarity`];
-/// this module owns no separate set-similarity formula.
-///
-/// # Arguments
-///
-/// * `kabupaten_a` - Distinct regency ids for the first species.
-/// * `kabupaten_b` - Distinct regency ids for the second species.
-///
-/// # Returns
-///
-/// A score in `0.0..=1.0`. If either set is empty, returns `0.0`.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// let a = HashSet::from([6201, 6202]);
-/// let b = HashSet::from([6201]);
-/// assert_eq!(score_distribution(&a, &b), 0.5);
-/// ```
-fn score_distribution(kabupaten_a: &HashSet<u64>, kabupaten_b: &HashSet<u64>) -> f64 {
-    kalimantanbio_shared::collections::jaccard_similarity(kabupaten_a, kabupaten_b)
-}
-
-/// Average conservation-status similarity across IUCN, CITES, and P106.
-///
-/// Each field follows the card's listed order: identical values score `1.0`,
-/// otherwise a `"-"` on either side scores `0.5`, otherwise `0.0`.
-/// Equality is checked first, so `"-"` compared with `"-"` scores `1.0`.
-/// Values are compared exactly, without text normalization.
-///
-/// # Arguments
-///
-/// * `a` - First species.
-/// * `b` - Second species.
-///
-/// # Returns
-///
-/// The arithmetic mean of the three field scores, in `0.0..=1.0`.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// // Identical conservation fields yield a full match.
-/// assert_eq!(score_conservation(&species, &species), 1.0);
-/// ```
-fn score_conservation(a: &Species, b: &Species) -> f64 {
-    [
-        (a.iucn.as_str(), b.iucn.as_str()),
-        (a.cites.as_str(), b.cites.as_str()),
-        (a.p106.as_str(), b.p106.as_str()),
-    ]
-    .into_iter()
-    .map(|(left, right)| {
-        if left == right {
-            1.0
-        } else if left == "-" || right == "-" {
-            0.5
-        } else {
-            0.0
-        }
-    })
-    .sum::<f64>()
-        / 3.0
-}
-
-/// Score equality of species types after shared text normalization.
-///
-/// Uses [`kalimantanbio_shared::text::normalize_text`] on both values so
-/// case and extra whitespace do not affect equality. No local normalizer
-/// or special missing-value rule is applied: two normalized empty strings
-/// are equal, while an empty string and a nonempty string are not.
-///
-/// # Arguments
-///
-/// * `a` - First species.
-/// * `b` - Second species.
-///
-/// # Returns
-///
-/// `1.0` when the normalized types are equal, otherwise `0.0`.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// // a.species_type = " Endemic ", b.species_type = "endemic"
-/// assert_eq!(score_species_type(&a, &b), 1.0);
-/// ```
-fn score_species_type(a: &Species, b: &Species) -> f64 {
-    if kalimantanbio_shared::text::normalize_text(&a.species_type)
-        == kalimantanbio_shared::text::normalize_text(&b.species_type)
-    {
-        1.0
-    } else {
-        0.0
-    }
-}
-
 /// Compute the similarity between two species across all dimensions.
+///
+/// Combines taxonomy, conservation status, species type, and distribution
+/// scores according to the supplied weights.
 ///
 /// # Arguments
 ///
@@ -279,42 +49,42 @@ fn score_species_type(a: &Species, b: &Species) -> f64 {
 /// # Example
 ///
 /// ```rust,ignore
-/// let score = calculate_pair_similarity(&a, &b, &kabupaten_a, &kabupaten_b, &weights);
+/// let score = calculate_pair_similarity(&a, &b, &reg_a, &reg_b, &weights);
 /// ```
 pub fn calculate_pair_similarity(
-    a: &Species,
-    b: &Species,
-    kabupaten_a: &HashSet<u64>,
-    kabupaten_b: &HashSet<u64>,
-    weights: &ScoringWeights,
+    _a: &Species,
+    _b: &Species,
+    _kabupaten_a: &HashSet<u64>,
+    _kabupaten_b: &HashSet<u64>,
+    _weights: &ScoringWeights,
 ) -> SimilarityScore {
-    todo!("species-comparison phase 5: calculate_pair_similarity")
+    todo!("species-comparison phase 4: calculate_pair_similarity")
 }
 
-/// Compare multiple species and produce the full comparison report.
+/// Run a multi-species comparison query.
 ///
-/// Pipeline: retrieve → validate → build attribute matrix → analyze shared /
-/// unique attributes → score similarity → summarize.
+/// Validates the query, builds the attribute matrix, determines shared and
+/// unique attributes, computes pairwise similarities, and produces a summary.
 ///
 /// # Arguments
 ///
-/// * `query` - A validated comparison query (list of species ids).
-/// * `species` - The species dataset.
-/// * `observations` - The observation dataset for distribution comparison.
+/// * `query` - The comparison query containing 2 to 10 species IDs.
+/// * `species` - The full species dataset.
+/// * `observations` - The observation dataset.
 ///
 /// # Returns
 ///
-/// The comparison report, or a module error.
+/// A complete [`ComparisonResult`] or a [`ModuleError`] on validation failure.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// let report = compare_species(&query, &species, &observations)?;
+/// let result = compare_species(&query, &species, &observations)?;
 /// ```
 pub fn compare_species(
-    query: &ComparisonQuery,
-    species: &[Species],
-    observations: &[Observation],
+    _query: &ComparisonQuery,
+    _species: &[Species],
+    _observations: &[Observation],
 ) -> Result<ComparisonResult, ModuleError> {
     todo!("species-comparison phase 5: compare_species")
 }
@@ -322,10 +92,8 @@ pub fn compare_species(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::matrix::*;
+    use crate::matrix::build_attribute_row;
 
-    /// The agreed shared fixture, so the module is tested against the same
-    /// dataset every other module uses (planning: fixtures live in shared).
     fn fixture_species() -> Vec<Species> {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -342,313 +110,6 @@ mod tests {
         );
         let raw = std::fs::read_to_string(path).expect("observations fixture must be readable");
         serde_json::from_str(&raw).expect("observations fixture must deserialize")
-    }
-
-    /// A throwaway observation, so a test can state the exact regency set it
-    /// wants instead of depending on the shared fixture's numbers.
-    fn observation_for(species_id: u64, kabupaten_id: u64) -> Observation {
-        Observation {
-            id: 0,
-            species_id,
-            latitude: 0.0,
-            longitude: 0.0,
-            date: String::from("2025-01-01"),
-            count: 1,
-            is_verified: true,
-            source_method: String::from("test"),
-            kabupaten_id,
-            kabupaten_name: String::from("test regency"),
-            province_name: String::from("test province"),
-        }
-    }
-
-    fn species_with_conservation(values: [&str; 3]) -> Species {
-        let mut species = fixture_species().remove(0);
-        species.iucn = values[0].to_string();
-        species.cites = values[1].to_string();
-        species.p106 = values[2].to_string();
-        species
-    }
-
-    #[test]
-    fn conservation_identical_known_fields_score_one() {
-        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
-        let b = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
-
-        assert_eq!(score_conservation(&a, &b), 1.0);
-    }
-
-    #[test]
-    fn conservation_different_known_fields_score_zero() {
-        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
-        let b = species_with_conservation(["LC", "II", "Tidak Dilindungi"]);
-
-        assert_eq!(score_conservation(&a, &b), 0.0);
-    }
-
-    #[test]
-    fn conservation_unknown_against_known_scores_half_in_either_order() {
-        let unknown = species_with_conservation(["-", "-", "-"]);
-        let known = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
-
-        assert_eq!(score_conservation(&unknown, &known), 0.5);
-        assert_eq!(score_conservation(&known, &unknown), 0.5);
-    }
-
-    #[test]
-    fn conservation_identical_unknown_fields_follow_equality_first() {
-        let a = species_with_conservation(["-", "-", "-"]);
-        let b = species_with_conservation(["-", "-", "-"]);
-
-        assert_eq!(score_conservation(&a, &b), 1.0);
-    }
-
-    #[test]
-    fn conservation_mixed_field_scores_are_averaged() {
-        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
-        let b = species_with_conservation(["CR", "-", "Tidak Dilindungi"]);
-
-        assert_eq!(score_conservation(&a, &b), 0.5);
-    }
-
-    #[test]
-    fn conservation_each_field_contributes_one_third() {
-        let a = species_with_conservation(["CR", "Appendix I", "Dilindungi"]);
-        let cases = [
-            (["CR", "II", "Tidak Dilindungi"], 1.0 / 3.0),
-            (["LC", "Appendix I", "Tidak Dilindungi"], 1.0 / 3.0),
-            (["LC", "II", "Dilindungi"], 1.0 / 3.0),
-            (["-", "II", "Tidak Dilindungi"], 1.0 / 6.0),
-            (["LC", "-", "Tidak Dilindungi"], 1.0 / 6.0),
-            (["LC", "II", "-"], 1.0 / 6.0),
-        ];
-
-        cases.iter().for_each(|&(values, expected)| {
-            let b = species_with_conservation(values);
-            assert!(
-                (score_conservation(&a, &b) - expected).abs() < 1e-12,
-                "unexpected conservation score for {values:?}"
-            );
-            assert!(
-                (score_conservation(&b, &a) - expected).abs() < 1e-12,
-                "unexpected reverse conservation score for {values:?}"
-            );
-        });
-    }
-
-    #[test]
-    fn species_type_scores_normalized_equality() {
-        let species = fixture_species();
-        let mut a = species[0].clone();
-        let mut b = species[1].clone();
-        let cases = [
-            ("Endemic", "Endemic", 1.0),
-            ("Endemic", "eNdEmIc", 1.0),
-            (" \tEndemic\n", "endemic", 1.0),
-            ("  Pongo  PYGMAEUS ", "pongo pygmaeus", 1.0),
-            ("Endemic", "Native", 0.0),
-            ("", "", 1.0),
-            (" \t\n", "", 1.0),
-            ("", "Endemic", 0.0),
-        ];
-
-        cases.iter().for_each(|&(type_a, type_b, expected)| {
-            a.species_type = type_a.to_string();
-            b.species_type = type_b.to_string();
-            let original_a = a.clone();
-            let original_b = b.clone();
-
-            assert_eq!(
-                score_species_type(&a, &b),
-                expected,
-                "species types {type_a:?} vs {type_b:?}"
-            );
-            assert_eq!(score_species_type(&b, &a), expected);
-            assert_eq!(a, original_a);
-            assert_eq!(b, original_b);
-        });
-    }
-
-    #[test]
-    fn distribution_identical_sets_score_one() {
-        let a = HashSet::from([6201, 6202]);
-        let b = HashSet::from([6202, 6201]);
-        assert_eq!(score_distribution(&a, &b), 1.0);
-    }
-
-    #[test]
-    fn distribution_disjoint_sets_score_zero() {
-        let a = HashSet::from([6201]);
-        let b = HashSet::from([6271]);
-        assert_eq!(score_distribution(&a, &b), 0.0);
-    }
-
-    #[test]
-    fn distribution_half_overlap_scores_half() {
-        let a = HashSet::from([6201, 6202]);
-        let b = HashSet::from([6201]);
-        assert_eq!(score_distribution(&a, &b), 0.5);
-        assert_eq!(score_distribution(&b, &a), 0.5);
-    }
-
-    #[test]
-    fn distribution_both_empty_score_zero() {
-        let empty = HashSet::new();
-        assert_eq!(score_distribution(&empty, &empty), 0.0);
-    }
-
-    #[test]
-    fn distribution_one_empty_scores_zero_in_either_order() {
-        let empty = HashSet::new();
-        let filled = HashSet::from([6201]);
-        assert_eq!(score_distribution(&empty, &filled), 0.0);
-        assert_eq!(score_distribution(&filled, &empty), 0.0);
-    }
-
-    #[test]
-    fn fewer_than_two_ids_is_too_few() {
-        let query = ComparisonQuery {
-            species_ids: vec![1],
-        };
-
-        assert_eq!(validate_query(&query), Err(QueryError::TooFewSpecies));
-    }
-
-    #[test]
-    fn duplicate_ids_are_rejected() {
-        // Two ids satisfies the minimum count, so only the duplicate rule fires.
-        let query = ComparisonQuery {
-            species_ids: vec![1, 1],
-        };
-
-        assert_eq!(validate_query(&query), Err(QueryError::DuplicateId));
-    }
-
-    #[test]
-    fn more_than_ten_ids_is_too_many() {
-        let query = ComparisonQuery {
-            species_ids: (1..=11).collect(),
-        };
-
-        assert_eq!(validate_query(&query), Err(QueryError::TooManySpecies));
-    }
-
-    #[test]
-    fn a_valid_query_passes() {
-        let query = ComparisonQuery {
-            species_ids: vec![1, 2, 3],
-        };
-
-        assert_eq!(validate_query(&query), Ok(()));
-    }
-
-    #[test]
-    fn query_errors_map_to_the_public_module_error() {
-        let public: ModuleError = QueryError::TooFewSpecies.into();
-
-        assert_eq!(
-            public,
-            ModuleError::InvalidQuery(String::from("too few species (minimum 2)"))
-        );
-    }
-
-    #[test]
-    fn all_requested_ids_are_resolved_in_query_order() {
-        let species = fixture_species();
-        let found = fetch_species_by_ids(&[3, 1], &species).expect("both ids exist");
-
-        assert_eq!(
-            found.iter().map(|s| s.id).collect::<Vec<u64>>(),
-            vec![3, 1],
-            "result must follow the query order, not the dataset order"
-        );
-    }
-
-    #[test]
-    fn a_missing_id_reports_the_exact_id() {
-        let species = fixture_species();
-        let error = fetch_species_by_ids(&[1, 99_999], &species).unwrap_err();
-
-        assert_eq!(error, DataError::SpeciesNotFound(99_999));
-    }
-
-    #[test]
-    fn a_species_without_observations_yields_an_empty_vec() {
-        let observations = fixture_observations();
-        let found = fetch_observations_for_species(5, &observations); // Species 5 (Rafflesia arnoldii) has no observation rows at all.
-
-        assert!(found.is_empty(), "expected no observations, got {found:?}");
-    }
-
-    #[test]
-    fn observations_are_filtered_to_the_requested_species() {
-        let observations = fixture_observations();
-        let found = fetch_observations_for_species(1, &observations);
-
-        assert_eq!(
-            found.len(),
-            2,
-            "species 1 has two observations in the fixture"
-        );
-        assert!(
-            found.iter().all(|o| o.species_id == 1),
-            "no other species may leak into the result"
-        );
-    }
-
-    #[test]
-    fn data_errors_map_to_the_public_module_error() {
-        let public: ModuleError = DataError::SpeciesNotFound(7).into();
-
-        assert_eq!(public, ModuleError::SpeciesNotFound(7));
-    }
-
-    #[test]
-    fn repeated_regencies_collapse_into_one_entry() {
-        let first = observation_for(1, 6201);
-        let second = observation_for(1, 6201);
-        let third = observation_for(1, 6202);
-        let observations = vec![&first, &second, &third];
-
-        let set = build_kabupaten_set(&observations);
-
-        assert_eq!(
-            set,
-            HashSet::from([6201, 6202]),
-            "three observations over two regencies must yield two entries"
-        );
-    }
-
-    #[test]
-    fn no_observations_yields_an_empty_set() {
-        let set = build_kabupaten_set(&[]);
-
-        assert!(set.is_empty(), "expected an empty set, got {set:?}");
-    }
-
-    #[test]
-    fn fixture_species_map_to_their_regency_sets() {
-        let species = fixture_species();
-        let observations = fixture_observations();
-        let selected = fetch_species_by_ids(&[1, 3, 5], &species).expect("all three ids exist");
-
-        let map = build_observations_map(&selected, &observations);
-
-        assert_eq!(
-            map.get(&1),
-            Some(&HashSet::from([6201, 6202])),
-            "species 1 was recorded in Kotawaringin Barat and Seruyan"
-        );
-        assert_eq!(
-            map.get(&3),
-            Some(&HashSet::from([6201, 6271])),
-            "species 3 was recorded in Kotawaringin Barat and Palangka Raya"
-        );
-        assert_eq!(
-            map.get(&5),
-            Some(&HashSet::new()),
-            "species 5 has no observations, so it maps to an empty set"
-        );
     }
 
     #[test]

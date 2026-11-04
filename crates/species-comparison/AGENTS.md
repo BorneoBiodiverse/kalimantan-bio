@@ -57,62 +57,67 @@ document disagreed with itself (§8/§9 draft vs §17/§19 final), the code won.
 
 ---
 
-## Agent Skills & Quality Standards
+## Agent Skills & Quality Directives
 
-When implementing, refactoring, or auditing code in this module, apply the installed skills:
+Apply these installed project skills on every task in this crate:
 
-1. **`thermo-nuclear-code-quality-review`**:
-   - Zero tolerance for spaghetti code or ad-hoc conditionals.
-   - Keep files well below 1,000 LOC through domain modularity (`validation.rs`, `matrix.rs`, `attributes.rs`, `scoring.rs`).
-   - Eliminate redundant wrappers and favor direct, idiomatic Rust.
-2. **`rust-best-practices`**:
-   - Borrowing over cloning (`&str`, `&[T]` in argument types).
-   - Clear type boundaries: private enums (`QueryError`, `DataError`) converted to public `ModuleError` via `From` implementations.
-   - No silent unwrap/expect in production code paths.
-3. **`rust-testing`**:
-   - Comprehensive unit tests covering edge cases (empty matrices, singletons, missing values, boundary limits).
-   - Ground tests in shared JSON fixtures (`shared/fixtures/species.json`, `shared/fixtures/observations.json`).
+- **`thermo-nuclear-code-quality-review`**:
+  - Ruthlessly eliminate accidental complexity, spaghetti conditionals, and one-off booleans.
+  - Seek "code judo" refactorings: make modules dramatically simpler, direct, and cohesive.
+  - Hard limit: Keep all source files well under 500 lines (strictly block any file approaching 1,000 lines).
+  - Enforce canonical layers: zero leakage of external or presentation concerns into domain logic.
+- **`rust-best-practices`**:
+  - Prefer borrowing over cloning (`&str`, `&[T]`, `&HashSet<u64>`).
+  - Explicit error boundaries: internal error enums (`QueryError`, `DataError`) converted via `From` into public `ModuleError`.
+  - Zero panics: no `.unwrap()` or `.expect()` in non-test paths.
+- **`rust-testing` & `tdd`**:
+  - Write test-first or test-alongside code covering empty sets, singletons, boundary limits (2 to 10 species), and realistic data.
+  - Ground all integration and unit tests in shared fixtures (`species.json`, `observations.json`).
+- **`systematic-debugging`**:
+  - Isolate root causes through targeted unit tests before proposing fixes.
 
 ---
 
-## Continuous Workflow: Stacked Feature Branches
+## Offline Maintainer Protocol (Never Get Blocked)
 
-To prevent development bottlenecks when repository maintainers or code owners are offline:
+When maintainers or reviewers are offline/sleeping, GitHub branch protection (`REVIEW_REQUIRED`) will pause merging to `main`. **Do not stop or idle**:
 
-1. **Stack Next Stage Branches:** Do not block waiting for PR merge. Branch the next stage directly off the completed stage branch:
+1. **Stack the next stage:** Branch the next phase directly off your current phase:
    ```text
-   main ───> PR #43 (Stage 2) ───> feat/shared-and-unique-attributes (Stage 3) ───> feat/similarity-scoring (Stage 4)
+   main ───> PR #43 (Stage 2) ───> PR #45 (Stage 3) ───> module4/feat/similarity-scoring (Stage 4) ───> Stage 5
    ```
-2. **Branch Naming Standard:** `module4/<type>/<short-description>` (e.g., `module4/feat/shared-and-unique-attributes`).
-3. **Pre-PR Verification Suite:** Run before opening any PR:
+2. **Implement & verify locally:** Build, test, and lint the new stage completely:
    ```bash
    cargo check --workspace
    cargo test -p species-comparison
    cargo clippy -p species-comparison
    cargo fmt -p species-comparison -- --check
-   cargo doc -p species-comparison --no-deps
    ```
-4. **Targeting PRs:**
-   - If targeting `main`, ensure each branch is clean, atomic, and rebasable.
-   - Once the owner approves and merges the parent PR, rebase or fast-forward the child branch onto `main`.
+3. **Open Draft PRs with upstream tracking:** Create the issue and push the stacked branch as a Draft PR.
+4. **When maintainer returns:** The reviewer can approve and merge down the stack seamlessly.
 
 ---
 
-## Pull Request Guidelines & Template
+## Pull Request Standard & Review Template
 
-When opening a Pull Request via `gh pr create`, use the following structured body:
+Every PR must be opened using this structured description:
 
 ```markdown
 ## Summary
-Concise description of the stage/feature implemented.
+Concise statement of what capability this PR adds and the architectural approach.
+
+## Code Quality & Architecture (Thermo-Nuclear Standards)
+- [x] Zero spaghetti: no ad-hoc branching, clean state/policy boundaries
+- [x] Modular sizing: all crate files kept well under 500 LOC
+- [x] Type cleanliness: borrowing over cloning, zero unwrap in domain logic
 
 ## Changes
-- Stage implementation details (functions added, files created)
-- Error handling and boundary conversions
+- `<module/file>`: Added `<functions>`
+- Error handling & type conversions
 
 ## Verification
-- [x] `cargo check --workspace` passes
-- [x] `cargo test -p species-comparison` (X tests passed, 0 failures)
+- [x] `cargo check --workspace` passed
+- [x] `cargo test -p species-comparison` passed (XX tests, 0 failures)
 - [x] `cargo clippy -p species-comparison` clean (0 warnings)
 - [x] `cargo fmt -p species-comparison -- --check` clean
 - [x] `cargo doc -p species-comparison --no-deps` clean
