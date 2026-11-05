@@ -6,9 +6,13 @@
 //! - Species type (normalized text equality)
 //! - Distribution (geographic Jaccard similarity across regency sets)
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use kalimantanbio_shared::core::Species;
+
+use kalimantanbio_shared::scoring::combine_weighted_scores;
+
+use crate::types::{ScoringWeights, SimilarityScore};
 
 /// Score taxonomic similarity using the shared taxonomy helper.
 ///
@@ -130,6 +134,121 @@ pub(crate) fn score_species_type(a: &Species, b: &Species) -> f64 {
     } else {
         0.0
     }
+}
+
+/// Combine all four similarity dimensions for one species pair.
+///
+/// # Arguments
+///
+/// * `a`, `b` - Species to compare.
+/// * `obs_a`, `obs_b` - Regency IDs for each species.
+/// * `weights` - Finite, non-negative weights summing to one.
+///   Pass `ScoringWeights::default()` for standard Module 4 scoring.
+///
+/// # Returns
+///
+/// Pair identifiers, individual dimension scores, and their weighted total.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let weights = ScoringWeights::default();
+/// let score = calculate_similarity_score(&a, &b, &obs_a, &obs_b, &weights);
+/// ```
+pub(crate) fn calculate_similarity_score(
+    a: &Species,
+    b: &Species,
+    obs_a: &HashSet<u64>,
+    obs_b: &HashSet<u64>,
+    weights: &ScoringWeights,
+) -> SimilarityScore {
+    let taxonomy_score = score_taxonomy(a, b);
+    let conservation_score = score_conservation(a, b);
+    let type_score = score_species_type(a, b);
+    let distribution_score = score_distribution(obs_a, obs_b);
+
+    let total_score = combine_weighted_scores(&[
+        (taxonomy_score, weights.taxonomy),
+        (conservation_score, weights.conservation),
+        (type_score, weights.species_type),
+        (distribution_score, weights.distribution),
+    ]);
+
+    SimilarityScore {
+        species_a_id: a.id,
+        species_b_id: b.id,
+        taxonomy_score,
+        conservation_score,
+        type_score,
+        distribution_score,
+        total_score,
+    }
+}
+
+/// Calculate scores for every unique pair in a validated species selection.
+///
+/// # Arguments
+///
+/// * `species_list` - Selected species with distinct IDs, in query order.
+/// * `observations_map` - Regency sets keyed by species ID.
+///   Missing entries are treated as empty sets.
+/// * `weights` - Validated scoring weights.
+///
+/// # Returns
+///
+/// One score for each pair of positions, without self-pairs or reversed pairs.
+/// Empty and singleton selections produce no pairs.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let scores = calculate_all_pairs(&selected, &map, &ScoringWeights::default());
+/// ```
+pub(crate) fn calculate_all_pairs(
+    species_list: &[&Species],
+    observations_map: &HashMap<u64, HashSet<u64>>,
+    weights: &ScoringWeights,
+) -> Vec<SimilarityScore> {
+    species_list
+        .iter()
+        .enumerate()
+        .flat_map(|(index, a)| {
+            species_list.iter().skip(index + 1).map(move |b| {
+                let empty = HashSet::new();
+                let obs_a = observations_map.get(&a.id).unwrap_or(&empty);
+                let obs_b = observations_map.get(&b.id).unwrap_or(&empty);
+                calculate_similarity_score(a, b, obs_a, obs_b, weights)
+            })
+        })
+        .collect()
+}
+
+/// Find the highest-scoring pair involving a target species.
+///
+/// # Arguments
+///
+/// * `target_id` - Species ID to look up on either side of each pair.
+/// * `scores` - Pair scores with finite totals.
+///
+/// # Returns
+///
+/// The highest-scoring matching pair, or `None` when none exists.
+/// Equal totals select the last matching pair in input order.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let best = find_most_similar(target_id, &scores);
+/// ```
+pub(crate) fn find_most_similar(
+    target_id: u64,
+    scores: &[SimilarityScore],
+) -> Option<SimilarityScore> {
+    scores
+        .iter()
+        .filter(|score| score.species_a_id == target_id || score.species_b_id == target_id)
+        .max_by(|left, right| left.total_score.total_cmp(&right.total_score))
+        .cloned()
 }
 
 #[cfg(test)]
@@ -299,5 +418,67 @@ mod tests {
             .expect("Rafflesia arnoldii");
 
         assert_eq!(score_taxonomy(a, b), 0.0);
+    }
+
+    #[test]
+    fn similarity_combines_dimensions_with_default_weights() {
+        let species = fixture_species();
+        let a = species.iter().find(|s| s.id == 1).expect("Pongo pygmaeus");
+        let b = species.iter().find(|s| s.id == 3).expect("Pongo abelii");
+        let obs_a = HashSet::from([6201, 6202]);
+        let obs_b = HashSet::from([6201]);
+        let score = calculate_similarity_score(a, b, &obs_a, &obs_b, &ScoringWeights::default());
+        assert_eq!((score.species_a_id, score.species_b_id), (1, 3));
+        assert_eq!(score.taxonomy_score, 1.0);
+        assert_eq!(score.conservation_score, 1.0);
+        assert_eq!(score.type_score, 0.0);
+        assert_eq!(score.distribution_score, 0.5);
+        let expected = 1.0 * 0.40 + 1.0 * 0.30 + 0.0 * 0.15 + 0.5 * 0.15;
+        assert!((score.total_score - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn all_pairs_for_three_species_are_unique_and_ordered() {
+        let species = fixture_species();
+        let selected: Vec<&Species> = [1, 2, 3]
+            .iter()
+            .map(|id| species.iter().find(|s| s.id == *id).expect("fixture ID"))
+            .collect();
+        let scores = calculate_all_pairs(&selected, &HashMap::new(), &ScoringWeights::default());
+        let pairs: Vec<_> = scores
+            .iter()
+            .map(|score| (score.species_a_id, score.species_b_id))
+            .collect();
+        assert_eq!(pairs, vec![(1, 2), (1, 3), (2, 3)]);
+        assert!(scores.iter().all(|score| score.distribution_score == 0.0));
+    }
+    #[test]
+    fn all_pairs_empty_or_single_species_returns_empty() {
+        let species = fixture_species();
+        let map = HashMap::new();
+        let weights = ScoringWeights::default();
+        assert!(calculate_all_pairs(&[], &map, &weights).is_empty());
+        assert!(calculate_all_pairs(&[&species[0]], &map, &weights).is_empty());
+    }
+    #[test]
+    fn most_similar_selects_best_matching_pair_on_either_side() {
+        let species = fixture_species();
+        let selected: Vec<&Species> = [1, 2, 3]
+            .iter()
+            .map(|id| species.iter().find(|s| s.id == *id).expect("fixture ID"))
+            .collect();
+        let scores = calculate_all_pairs(&selected, &HashMap::new(), &ScoringWeights::default());
+        for target in [1, 3] {
+            let best = find_most_similar(target, &scores).expect("matching pair");
+            assert_eq!((best.species_a_id, best.species_b_id), (1, 3));
+        }
+        // Pair (1, 3) is strongest overall, but must not be returned for target 2.
+        let best_for_two = find_most_similar(2, &scores).expect("matching pair");
+        assert_eq!(
+            (best_for_two.species_a_id, best_for_two.species_b_id),
+            (2, 3)
+        );
+        assert!(find_most_similar(999, &scores).is_none());
+        assert!(find_most_similar(1, &[]).is_none());
     }
 }
