@@ -7,12 +7,11 @@
 //!
 //! Public API: `compare_species` and `calculate_pair_similarity`. Internal
 //! helpers stay private.
-//!
-//! > **Status: interface scaffold.** Bodies are stubs pending implementation.
 
 pub(crate) mod attributes;
 pub(crate) mod matrix;
 pub(crate) mod scoring;
+pub(crate) mod summary;
 pub mod types;
 pub(crate) mod validation;
 
@@ -20,6 +19,7 @@ use std::collections::HashSet;
 
 use kalimantanbio_shared::core::{Observation, Species};
 
+pub(crate) use crate::summary::generate_summary;
 pub use crate::types::{
     ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights, SimilarityScore,
     SpeciesAttributeRow,
@@ -52,13 +52,13 @@ pub(crate) use crate::validation::{
 /// let score = calculate_pair_similarity(&a, &b, &reg_a, &reg_b, &weights);
 /// ```
 pub fn calculate_pair_similarity(
-    _a: &Species,
-    _b: &Species,
-    _kabupaten_a: &HashSet<u64>,
-    _kabupaten_b: &HashSet<u64>,
-    _weights: &ScoringWeights,
+    a: &Species,
+    b: &Species,
+    kabupaten_a: &HashSet<u64>,
+    kabupaten_b: &HashSet<u64>,
+    weights: &ScoringWeights,
 ) -> SimilarityScore {
-    todo!("species-comparison phase 4: calculate_pair_similarity")
+    crate::scoring::calculate_similarity_score(a, b, kabupaten_a, kabupaten_b, weights)
 }
 
 /// Run a multi-species comparison query.
@@ -110,6 +110,21 @@ mod tests {
         );
         let raw = std::fs::read_to_string(path).expect("observations fixture must be readable");
         serde_json::from_str(&raw).expect("observations fixture must deserialize")
+    }
+
+    #[test]
+    fn calculate_pair_similarity_delegates_to_scoring() {
+        let species = fixture_species();
+        let a = &species[0];
+        let b = &species[1];
+        let weights = ScoringWeights::default();
+        let kab_a = HashSet::from([6201, 6202]);
+        let kab_b = HashSet::from([6201]);
+
+        let score = calculate_pair_similarity(a, b, &kab_a, &kab_b, &weights);
+        assert_eq!(score.species_a_id, a.id);
+        assert_eq!(score.species_b_id, b.id);
+        assert!(score.total_score >= 0.0 && score.total_score <= 1.0);
     }
 
     #[test]
