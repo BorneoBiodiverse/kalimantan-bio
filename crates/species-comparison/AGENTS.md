@@ -52,8 +52,8 @@ document disagreed with itself (§8/§9 draft vs §17/§19 final), the code won.
 | **1** | Query validation & species retrieval (`validate_query`, `fetch_species_by_ids`) | `src/validation.rs` | Completed (PR #33) |
 | **2** | Matrix assembly & attribute extraction (`build_attribute_matrix`, `extract_attribute_values`) | `src/matrix.rs` | Completed (PR #43, awaiting review) |
 | **3** | Shared & unique attribute analysis (`is_attribute_shared`, `find_shared_attributes`, `find_unique_attributes`, `find_distinguishing_characteristics`) | `src/attributes.rs` | Implemented |
-| **4** | Similarity scoring & pair calculation (`score_conservation`, `score_species_type`, `score_distribution`, `calculate_similarity_score`, `calculate_all_pairs`, `find_most_similar`, `calculate_pair_similarity`) | `src/scoring.rs` | Next |
-| **5** | Pipeline composition & summary generation (`generate_summary`, full `compare_species`) | `src/lib.rs` | Next |
+| **4** | Similarity scoring & pair calculation (`score_conservation`, `score_species_type`, `score_distribution`, `calculate_similarity_score`, `calculate_all_pairs`, `find_most_similar`, `calculate_pair_similarity`) | `src/scoring.rs` | Completed |
+| **5** | Pipeline composition & summary generation (`generate_summary`, full `compare_species`) | `src/lib.rs` | Completed |
 
 ---
 
