@@ -13,20 +13,19 @@ pub(crate) mod matrix;
 pub(crate) mod scoring;
 pub(crate) mod summary;
 pub mod types;
+pub use crate::types::{
+    ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights, SimilarityScore,
+    SpeciesAttributeRow,
+};
 pub(crate) mod validation;
 
 use std::collections::HashSet;
 
 use kalimantanbio_shared::core::{Observation, Species};
 
-pub(crate) use crate::summary::generate_summary;
-pub use crate::types::{
-    ComparisonQuery, ComparisonResult, ModuleError, ScoringWeights, SimilarityScore,
-    SpeciesAttributeRow,
-};
 pub(crate) use crate::validation::{
-    build_kabupaten_set, build_observations_map, fetch_observations_for_species,
-    fetch_species_by_ids, validate_query, MAX_SPECIES, MIN_SPECIES,
+    build_observations_map, fetch_observations_for_species, fetch_species_by_ids, validate_query,
+    MAX_SPECIES, MIN_SPECIES,
 };
 
 /// Compute the similarity between two species across all dimensions.
@@ -81,12 +80,65 @@ pub fn calculate_pair_similarity(
 /// ```rust,ignore
 /// let result = compare_species(&query, &species, &observations)?;
 /// ```
+/// Run a multi-species comparison query.
+///
+/// Validates the query, builds the attribute matrix, determines shared and
+/// unique attributes, computes pairwise similarities, and produces a summary.
+///
+/// # Arguments
+///
+/// * `query` - The comparison query containing 2 to 10 species IDs.
+/// * `species` - The full species dataset.
+/// * `observations` - The observation dataset.
+///
+/// # Returns
+///
+/// A complete [`ComparisonResult`] or a [`ModuleError`] on validation failure.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let result = compare_species(&query, &species, &observations)?;
+/// ```
 pub fn compare_species(
-    _query: &ComparisonQuery,
-    _species: &[Species],
-    _observations: &[Observation],
+    query: &ComparisonQuery,
+    species: &[Species],
+    observations: &[Observation],
 ) -> Result<ComparisonResult, ModuleError> {
-    todo!("species-comparison phase 5: compare_species")
+    // 1. Validate the query (2-10 distinct species IDs).
+    validate_query(query)?;
+
+    // 2. Resolve the requested species IDs against the dataset, preserving order.
+    let selected = fetch_species_by_ids(&query.species_ids, species)?;
+
+    // 3. Build the regency-set map keyed by species ID.
+    let obs_map = build_observations_map(&selected, observations);
+
+    // 4. Build the attribute matrix in query order.
+    let matrix = crate::matrix::build_attribute_matrix(&selected, observations);
+
+    // 5. Shared / unique / distinguishing attributes.
+    let shared = crate::attributes::find_shared_attributes(&matrix);
+    let unique = crate::attributes::find_unique_attributes(&matrix);
+    let distinguishing = crate::attributes::find_distinguishing_characteristics(&matrix);
+
+    // 6. Pairwise similarity scores.
+    let weights = ScoringWeights::default();
+    let scores = crate::scoring::calculate_all_pairs(&selected, &obs_map, &weights);
+
+    // 7. Human-readable summary.
+    let summary =
+        crate::summary::build_summary(&matrix, &shared, &unique, &distinguishing, &scores);
+
+    Ok(ComparisonResult {
+        query: query.clone(),
+        attribute_matrix: matrix,
+        shared_attributes: shared,
+        unique_attributes: unique,
+        distinguishing_characteristics: distinguishing,
+        similarity_scores: scores,
+        summary,
+    })
 }
 
 #[cfg(test)]
@@ -160,5 +212,49 @@ mod tests {
             row.taxonomy_path,
             "Animalia > Chordata > Mammalia > Primates > Hominidae > Pongo"
         );
+    }
+
+    #[test]
+    fn compare_species_full_pipeline_on_fixture_pair() {
+        let species = fixture_species();
+        let observations = fixture_observations();
+
+        let query = ComparisonQuery {
+            species_ids: vec![1, 3],
+        };
+        let result = compare_species(&query, &species, &observations).expect("comparison succeeds");
+
+        assert_eq!(result.query.species_ids, vec![1, 3]);
+        assert_eq!(result.attribute_matrix.len(), 2);
+        assert_eq!(result.attribute_matrix[0].species_id, 1);
+        assert_eq!(result.attribute_matrix[1].species_id, 3);
+        assert_eq!(result.similarity_scores.len(), 1);
+        assert!(result.similarity_scores[0].total_score >= 0.0);
+        assert!(result.similarity_scores[0].total_score <= 1.0);
+        assert!(!result.summary.is_empty());
+    }
+
+    #[test]
+    fn compare_species_rejects_unknown_species_id() {
+        let species = fixture_species();
+        let observations = fixture_observations();
+
+        let query = ComparisonQuery {
+            species_ids: vec![1, 999],
+        };
+        let err = compare_species(&query, &species, &observations).unwrap_err();
+        assert!(matches!(err, ModuleError::SpeciesNotFound(999)));
+    }
+
+    #[test]
+    fn compare_species_rejects_too_few_species() {
+        let species = fixture_species();
+        let observations = fixture_observations();
+
+        let query = ComparisonQuery {
+            species_ids: vec![1],
+        };
+        let err = compare_species(&query, &species, &observations).unwrap_err();
+        assert!(matches!(err, ModuleError::InvalidQuery(_)));
     }
 }

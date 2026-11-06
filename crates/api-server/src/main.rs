@@ -75,7 +75,7 @@ fn build_cors() -> CorsLayer {
     match origin.parse::<HeaderValue>() {
         Ok(value) => CorsLayer::new()
             .allow_origin(value)
-            .allow_methods([Method::GET]),
+            .allow_methods([Method::GET, Method::POST]),
         Err(_) => CorsLayer::permissive(),
     }
 }
@@ -133,7 +133,7 @@ pub fn build_router(state: AppState) -> Router {
         // Module 4 — Comparative Species Explorer
         .route(
             "/api/v1/compare",
-            axum::routing::get(routes::comparison::compare_species),
+            axum::routing::post(routes::comparison::compare_species),
         )
         // Module 5 — Biodiversity Knowledge & Citation Explorer
         .route(

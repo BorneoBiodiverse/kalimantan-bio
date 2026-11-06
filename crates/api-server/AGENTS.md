@@ -15,7 +15,7 @@
 - **No domain logic** — only HTTP routing, request parsing, response serialization
 - **Composes module `pub fn`** — demonstrates inter-module contract (40% rubrik)
 - **CORS configured** for Django origin (`http://localhost:8000`)
-- **Bodies remain stubs** — `todo!("api-server: <route>")`
+- **Module 4 compare implemented** — `POST /api/v1/compose` accepts versioned JSON payload from Django and composes `species_comparison::compare_species`
 
 ---
 
@@ -29,7 +29,7 @@
 | `GET` | `/api/v1/taxonomy/report` | taxonomy | `taxonomy::report_handler` |
 | `GET` | `/api/v1/taxonomy/diversity` | taxonomy | `taxonomy::diversity_handler` |
 | `GET` | `/api/v1/taxonomy/gaps` | taxonomy | `taxonomy::gaps_handler` |
-| `POST` | `/api/v1/compare` | species-comparison | `comparison::compare_handler` |
+| `POST` | `/api/v1/compare` | species-comparison | `comparison::compare_species` |
 | `GET` | `/api/v1/knowledge/explore` | knowledge-citations | `knowledge::explore_handler` |
 | `GET` | `/api/v1/knowledge/citations` | knowledge-citations | `knowledge::citations_handler` |
 | `GET` | `/api/v1/knowledge/export` | knowledge-citations | `knowledge::export_handler` |
@@ -58,21 +58,9 @@ serde_json = { workspace = true }
 
 ---
 
-## Handler Pattern (Stub)
+## Handler Pattern
 
-```rust
-// crates/api-server/src/routes/search.rs
-use axum::{extract::Query, Json};
-use species_search::search;
-use kalimantanbio_shared::core::Species;
-
-pub async fn search_handler(Query(params): Query<SearchParams>) -> Json<SearchResponse> {
-    // TODO: fetch all_species from shared db or fixtures
-    let all_species: Vec<Species> = vec![]; // stub
-    let results = search(&params.q, &all_species);
-    todo!("api-server: search_handler")
-}
-```
+Implemented handlers compose module `pub fn` directly (no `todo!()`). Module 4 compare is implemented; remaining handlers are stubs.
 
 ---
 
@@ -124,8 +112,4 @@ cargo clippy -p api-server
 
 ## Stub Convention
 
-```rust
-todo!("api-server: search_handler")
-todo!("api-server: relationships_handler")
-# etc.
-```
+See Handler Pattern above — implemented handlers compose module `pub fn` directly; remaining handlers use `todo!("api-server: <route>")`.
