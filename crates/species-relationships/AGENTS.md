@@ -10,30 +10,55 @@
 
 ---
 
+## File and Module Structure
+
+Complies with the domain/feature-oriented convention established in root `AGENTS.md`:
+
+```text
+crates/species-relationships/
+├── Cargo.toml
+├── README.md
+├── AGENTS.md
+├── src/
+│   ├── lib.rs              # Crate root, pipeline composition, re-exports
+│   ├── types.rs            # Public domain types
+│   ├── error.rs            # Public error types (thiserror)
+│   ├── validation.rs       # Data sanitization, preparation, and validation
+│   ├── evidence.rs         # Multi-attribute similarity evidence extraction
+│   ├── scoring.rs          # Weighted evidence scoring and pair calculation
+│   ├── discovery.rs        # Candidate filtering, explanations, and ranking
+│   └── network.rs          # Domain species network data structures
+└── tests/
+    ├── common/             # Integration test fixtures and helpers
+    └── pipeline_integration.rs # End-to-end integration test suite
+```
+
+---
+
 ## Public API (§17.2)
 
 | `pub fn` | Signature | Purpose |
 |----------|-----------|---------|
 | `explore_relationships` | `fn explore_relationships(input: &[Species], query: &RelationshipQuery, weights: &ScoreWeights) -> Result<ExplorerResult, ExplorerError>` | Main pipeline: validate → evidence → score → rank → network |
-| `calculate_relationship` | `fn calculate_relationship(a: &Species, b: &Species, habitats_a: &HashSet<String>, habitats_b: &HashSet<String>, weights: &ScoreWeights) -> Result<RelationshipScore, ValidationError>` | Optional: pair-wise score for reuse/testing |
+| `calculate_relationship` | `fn calculate_relationship(a: &Species, b: &Species, habitats_a: &HashSet<String>, habitats_b: &HashSet<String>, weights: &ScoreWeights) -> Result<RelationshipScore, ValidationError>` | Pair-wise score calculation across taxonomy, habitat, characteristics |
 
 ---
 
 ## Public Types in Signatures (§2.3, §3.2)
 
-| Type | Kind | Description |
-|------|------|-------------|
-| `AttributeKind` | `enum` | `Taxonomy`, `Habitat`, `Characteristic` |
-| `ScoreWeights` | `struct` | `taxonomy: f64`, `habitat: f64`, `characteristic: f64` |
-| `RelationshipQuery` | `struct` | `species_id: u64`, `min_score: f64`, `limit: usize`, `required_basis: Option<AttributeKind>` |
-| `AttributeEvidence` | `struct` | `attribute: AttributeKind`, `similarity: Option<f64>`, `shared_values: Vec<String>` |
-| `RelationshipScore` | `struct` | `total: f64`, `coverage: f64`, `evidence: Vec<AttributeEvidence>` |
-| `RelatedSpecies` | `struct` | `species: Species`, `score: RelationshipScore`, `explanations: Vec<String>` |
-| `NetworkNode` | `struct` | `id: u64`, `label: String`, `is_center: bool` |
-| `NetworkEdge` | `struct` | `source: u64`, `target: u64`, `score: RelationshipScore`, `explanations: Vec<String>` |
-| `SpeciesNetwork` | `struct` | `nodes: Vec<NetworkNode>`, `edges: Vec<NetworkEdge>` |
-| `ExplorerResult` | `struct` | `center_id: u64`, `related: Vec<RelatedSpecies>`, `network: SpeciesNetwork`, `weights: ScoreWeights`, `scoring_version: String` |
-| `ExplorerError` | `enum` | `InvalidQuery`, `InvalidWeights`, `InvalidDataset`, `SpeciesNotFound` |
+| Type | Kind | Location | Description |
+|------|------|----------|-------------|
+| `AttributeKind` | `enum` | `types.rs` | `Taxonomy`, `Habitat`, `Characteristic` |
+| `ScoreWeights` | `struct` | `types.rs` | `taxonomy: f64`, `habitat: f64`, `characteristic: f64` |
+| `RelationshipQuery` | `struct` | `types.rs` | `species_id: u64`, `min_score: f64`, `limit: usize`, `required_basis: Option<AttributeKind>` |
+| `AttributeEvidence` | `struct` | `types.rs` | `attribute: AttributeKind`, `similarity: Option<f64>`, `shared_values: Vec<String>` |
+| `RelationshipScore` | `struct` | `types.rs` | `total: f64`, `coverage: f64`, `evidence: Vec<AttributeEvidence>` |
+| `RelatedSpecies` | `struct` | `types.rs` | `species: Species`, `score: RelationshipScore`, `explanations: Vec<String>` |
+| `NetworkNode` | `struct` | `types.rs` | `id: u64`, `label: String`, `is_center: bool` |
+| `NetworkEdge` | `struct` | `types.rs` | `source: u64`, `target: u64`, `score: RelationshipScore`, `explanations: Vec<String>` |
+| `SpeciesNetwork` | `struct` | `types.rs` | `nodes: Vec<NetworkNode>`, `edges: Vec<NetworkEdge>` |
+| `ExplorerResult` | `struct` | `types.rs` | `center_id: u64`, `related: Vec<RelatedSpecies>`, `network: SpeciesNetwork`, `weights: ScoreWeights`, `scoring_version: String` |
+| `ExplorerError` | `enum` | `error.rs` | `InvalidQuery`, `InvalidWeights`, `InvalidDataset`, `SpeciesNotFound` |
 
 All public types and fields **must have rustdoc comments**.
 
@@ -44,27 +69,23 @@ All public types and fields **must have rustdoc comments**.
 ```rust
 use kalimantanbio_shared::{
     core::{Species, Taxonomy},
+    text::normalize_text,
     taxonomy::calculate_taxonomy_similarity,
-    collections::jaccard_similarity,
+    collections::{jaccard_similarity, set_intersection},
     scoring::combine_weighted_scores,
-    validation::{validate_score_range, validate_weights_sum_to_one},
-    db::{create_pool, fetch_all_species, fetch_species_by_id},
+    validation::validate_weights_sum_to_one,
 };
 ```
 
-`Species` provides canonical `habitats` and `characteristics` collections
-(`HashSet<String>`, empty set = data unavailable). Stage 2 reads them through
-`collect_evidence`; the public pair API accepts normalized habitat labels as
-explicit arguments.
-
 ---
 
-## Internal (Private) Functions — Not Exported (§17.3)
+## Feature Modules & Internal Functions (§17.3)
 
-- `normalize_species`, `prepare_species`, `validate_query`, `validate_weights`, `find_species`
-- `taxonomy_evidence`, `set_evidence`, `collect_evidence`, `score_evidence`
-- `candidate_species`, `explain_relationship`, `score_candidates`, `rank_related`
-- `make_node`, `make_edge`, `build_network`, `assemble_result`
+- **`validation`**: `normalize_species`, `prepare_species`, `validate_query`, `validate_weights`, `find_species`
+- **`evidence`**: `taxonomy_evidence`, `set_evidence`, `collect_evidence`
+- **`scoring`**: `score_evidence`, `calculate_relationship`
+- **`discovery`**: `candidate_species`, `explain_relationship`, `score_candidates`, `rank_related`
+- **`network`**: `make_node`, `make_edge`, `build_network`, `assemble_result`
 
 ---
 
@@ -87,38 +108,24 @@ explicit arguments.
 
 ---
 
-## Rustdoc Requirements (§17.5)
-
-- `explore_relationships` — complete with `# Arguments`, `# Returns`, `# Errors`, `# Example`
-- `calculate_relationship` — formula and weight prerequisites
-- All public types in signatures: `ExplorerResult`, `RelationshipQuery`, `ScoreWeights`, `RelatedSpecies`, `SpeciesNetwork`, `ExplorerError`
-
-```bash
-cargo doc -p species-relationships --no-deps --open
-cargo check -p species-relationships
-cargo test -p species-relationships
-```
-
----
-
 ## Pipeline Composition (§9)
 
 ```rust
-fn explore_relationships(
+pub fn explore_relationships(
     input: &[Species],
     query: &RelationshipQuery,
     weights: &ScoreWeights,
 ) -> Result<ExplorerResult, ExplorerError> {
-    validate_query(query)?;
-    validate_weights(weights)?;
+    validation::validate_query(query)?;
+    validation::validate_weights(weights)?;
 
-    let species = prepare_species(input)?;
-    let center = find_species(&species, &query.species_id)?;
-    let candidates = candidate_species(&species, &center.id);
-    let scored = score_candidates(center, &candidates, weights);
-    let related = rank_related(scored, query);
+    let species = validation::prepare_species(input)?;
+    let center = validation::find_species(&species, query.species_id)?;
+    let candidates = discovery::candidate_species(&species, center.id);
+    let scored = discovery::score_candidates(center, &candidates, weights);
+    let related = discovery::rank_related(scored, query);
 
-    Ok(assemble_result(center, related, weights))
+    Ok(network::assemble_result(center, related, weights))
 }
 ```
 
@@ -130,16 +137,5 @@ fn explore_relationships(
 cargo check -p species-relationships
 cargo doc -p species-relationships --no-deps
 cargo test -p species-relationships
-cargo clippy -p species-relationships
+cargo clippy -p species-relationships --no-deps -- -D warnings
 ```
-
----
-
-## Stub Convention
-
-```rust
-todo!("species-relationships phase 5: explore_relationships")
-todo!("species-relationships phase 2: calculate_relationship")
-```
-
-Signatures must match planning §17.2 exactly.

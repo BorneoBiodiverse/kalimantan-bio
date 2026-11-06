@@ -64,7 +64,7 @@ pub struct RelationshipQuery {
 }
 
 /// Evidence collected for one relationship dimension.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AttributeEvidence {
     /// Evidence basis.
     pub attribute: AttributeKind,
@@ -144,15 +144,4 @@ pub struct ExplorerResult {
     pub scoring_version: String,
 }
 
-/// Errors reported by the exploration pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub enum ExplorerError {
-    /// The query is invalid.
-    InvalidQuery(String),
-    /// The weights are invalid.
-    InvalidWeights,
-    /// The dataset is invalid.
-    InvalidDataset(String),
-    /// The center species was not found.
-    SpeciesNotFound(SpeciesId),
-}
+pub use crate::error::ExplorerError;

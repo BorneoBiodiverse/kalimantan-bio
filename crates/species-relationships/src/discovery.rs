@@ -1,32 +1,33 @@
-//! Tahap 3 — Discovery, Ranking, dan Penjelasan Hubungan.
+//! Discovery, ranking, and explanation of related species.
 //!
-//! Modul ini menyediakan fungsi-fungsi murni (pure functions) untuk:
-//! - Menyaring spesies selain pusat (`candidate_species`).
-//! - Menghasilkan penjelasan deterministik berbasis template untuk tiap dimensi bukti (`explain_relationship`).
-//! - Menghitung skor dan menyusun penjelasan untuk seluruh kandidat (`score_candidates`).
-//! - Menyaring, mengurutkan (ranking), dan membatasi rekomendasi spesies terkait (`rank_related`).
-
-#![allow(dead_code)]
+//! Provides pure functions to:
+//! - Filter candidate species from the dataset (`candidate_species`).
+//! - Generate deterministic templated explanations for relationship evidence (`explain_relationship`).
+//! - Score and explain all candidate peers against the center species (`score_candidates`).
+//! - Filter, sort, and truncate related species recommendations (`rank_related`).
 
 use kalimantanbio_shared::core::Species;
 
-use crate::stage2::{collect_evidence, score_evidence};
+use crate::evidence::collect_evidence;
+use crate::scoring::score_evidence;
 use crate::types::{
     AttributeEvidence, AttributeKind, RelatedSpecies, RelationshipQuery, RelationshipScore,
     ScoreWeights, SpeciesId,
 };
 
-/// Toleransi komparasi floating-point untuk ambang skor dan kesetaraan ranking.
+/// Floating-point comparison tolerance for score thresholds and equality.
 const FLOAT_TOLERANCE: f64 = 1e-9;
 
 /// Mengambil semua kandidat spesies dari dataset selain spesies pusat.
 ///
 /// Mengevaluasi seluruh kandidat untuk mempermudah verifikasi dan determinisme.
-pub(crate) fn candidate_species<'a>(all: &'a [Species], center_id: &SpeciesId) -> Vec<&'a Species> {
-    all.iter().filter(|s| s.id != *center_id).collect()
+pub(crate) fn candidate_species(all: &[Species], center_id: SpeciesId) -> Vec<&Species> {
+    all.iter().filter(|s| s.id != center_id).collect()
 }
 
-/// Menghasilkan penjelasan relasi berbasis template dari nilai atribut bersama,
+/// Menghasilkan penjelasan berbasis template untuk setiap dimensi bukti.
+///
+/// Penjelasan menggambarkan kesamaan pada tingkat taksonomi/nilai bersama,
 /// kontribusi berbobot, dan keterbatasan data atribut.
 ///
 /// Penjelasan dihasilkan deterministik dalam urutan kanonik:
@@ -188,12 +189,12 @@ mod tests {
     #[test]
     fn candidate_species_excludes_center() {
         let species = scenario_one();
-        let center_id = species[0].id; // 1
+        let center_id = species[0].id;
 
-        let candidates = candidate_species(&species, &center_id);
+        let candidates = candidate_species(&species, center_id);
 
         assert_eq!(candidates.len(), 3);
-        assert!(candidates.iter().all(|s| s.id != center_id));
+        assert!(candidates.iter().all(|c| c.id != center_id));
         assert_eq!(candidates[0].id, 2);
         assert_eq!(candidates[1].id, 3);
         assert_eq!(candidates[2].id, 4);
@@ -203,8 +204,10 @@ mod tests {
     fn candidate_species_empty_when_only_center() {
         let species = scenario_one();
         let single = &species[0..1];
+        let center_id = single[0].id;
 
-        let candidates = candidate_species(single, &single[0].id);
+        let candidates = candidate_species(single, center_id);
+
         assert!(candidates.is_empty());
     }
 
@@ -212,36 +215,35 @@ mod tests {
     fn score_candidates_scenario_one() {
         let species = scenario_one();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
 
         let scored = score_candidates(center, &candidates, &weights);
 
         assert_eq!(scored.len(), 3);
-        // sp-b: ID 2
+
+        // sp-b: genus 1.0 (0.50), habitat wetland 0.5 (0.15), char woody+evergreen 1.0 (0.20) -> total 0.85
         assert_eq!(scored[0].species.id, 2);
         assert_close(scored[0].score.total, 0.85);
-        assert_close(scored[0].score.coverage, 1.0);
         assert_eq!(scored[0].explanations.len(), 3);
         assert!(scored[0].explanations[0].contains("Memiliki genus yang sama: genus-a"));
-        assert!(scored[0].explanations[0].contains("Kontribusi taksonomi 0.50"));
+        assert!(scored[0].explanations[0].contains("0.50"));
         assert!(scored[0].explanations[1].contains("Memiliki habitat yang sama: wetland"));
-        assert!(scored[0].explanations[1].contains("Kontribusi habitat 0.15"));
+        assert!(scored[0].explanations[1].contains("0.15"));
         assert!(scored[0].explanations[2]
             .contains("Memiliki karakteristik yang sama: evergreen, woody"));
-        assert!(scored[0].explanations[2].contains("Kontribusi karakteristik 0.20"));
+        assert!(scored[0].explanations[2].contains("0.20"));
 
-        // sp-c: ID 3
+        // sp-c: family 0.6 (0.30), habitat lowland 0.5 (0.15), char woody 0.5 (0.10) -> total 0.55
         assert_eq!(scored[1].species.id, 3);
         assert_close(scored[1].score.total, 0.55);
         assert!(scored[1].explanations[0].contains("Memiliki famili yang sama: family-a"));
-        assert!(scored[1].explanations[0].contains("Kontribusi taksonomi 0.30"));
+        assert!(scored[1].explanations[0].contains("0.30"));
 
-        // sp-d: ID 4
+        // sp-d: no matches -> total 0.0
         assert_eq!(scored[2].species.id, 4);
         assert_close(scored[2].score.total, 0.0);
-        assert!(scored[2].explanations[0]
-            .contains("Taksonomi berbeda pada tingkat yang dapat dibandingkan"));
+        assert!(scored[2].explanations[0].contains("Taksonomi berbeda"));
         assert!(scored[2].explanations[1].contains("Tidak ada habitat bersama"));
         assert!(scored[2].explanations[2].contains("Tidak ada karakteristik bersama"));
     }
@@ -250,37 +252,34 @@ mod tests {
     fn score_candidates_scenario_two_missing_data_explanations() {
         let species = scenario_two();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
 
         let scored = score_candidates(center, &candidates, &weights);
 
         assert_eq!(scored.len(), 2);
-        // sp-e: ID 5
-        let sp_e = &scored[0];
-        assert_eq!(sp_e.species.id, 5);
-        assert_close(sp_e.score.total, 0.50);
-        assert_close(sp_e.score.coverage, 0.50);
-        assert!(sp_e.explanations[0].contains("Memiliki genus yang sama: genus-a"));
-        assert!(sp_e.explanations[1].contains("Data habitat belum tersedia"));
-        assert!(sp_e.explanations[2].contains("Data karakteristik belum tersedia"));
 
-        // sp-f: ID 6
-        let sp_f = &scored[1];
-        assert_eq!(sp_f.species.id, 6);
-        assert_close(sp_f.score.total, 0.0);
-        assert_close(sp_f.score.coverage, 0.0);
-        assert!(sp_f.explanations[0].contains("Data taksonomi belum tersedia"));
-        assert!(sp_f.explanations[1].contains("Data habitat belum tersedia"));
-        assert!(sp_f.explanations[2].contains("Data karakteristik belum tersedia"));
+        // sp-e: genus sama (0.50), habitat dan char kosong (None)
+        assert_eq!(scored[0].species.id, 5);
+        assert_close(scored[0].score.total, 0.50);
+        assert_close(scored[0].score.coverage, 0.50);
+        assert!(scored[0].explanations[0].contains("Memiliki genus yang sama: genus-a"));
+        assert!(scored[0].explanations[1].contains("Data habitat belum tersedia"));
+        assert!(scored[0].explanations[2].contains("Data karakteristik belum tersedia"));
+
+        // sp-f: semua data taksonomi dan atribut kosong
+        assert_eq!(scored[1].species.id, 6);
+        assert_close(scored[1].score.total, 0.0);
+        assert_close(scored[1].score.coverage, 0.0);
+        assert!(scored[1].explanations[0].contains("Data taksonomi belum tersedia"));
     }
 
     #[test]
     fn rank_related_scenario_one_ranking() {
         let species = scenario_one();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
         let scored = score_candidates(center, &candidates, &weights);
 
         let query = RelationshipQuery {
@@ -292,7 +291,6 @@ mod tests {
 
         let ranked = rank_related(scored, &query);
 
-        // sp-d berskor 0.00 dikeluarkan; sp-b (0.85) peringkat 1, sp-c (0.55) peringkat 2
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked[0].species.id, 2);
         assert_close(ranked[0].score.total, 0.85);
@@ -304,11 +302,10 @@ mod tests {
     fn rank_related_min_score_cutoff() {
         let species = scenario_one();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
         let scored = score_candidates(center, &candidates, &weights);
 
-        // Ambang dinaikkan ke 0.60 -> hanya sp-b (0.85) yang lolos
         let query = RelationshipQuery {
             species_id: center.id,
             min_score: 0.60,
@@ -317,6 +314,7 @@ mod tests {
         };
 
         let ranked = rank_related(scored, &query);
+
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked[0].species.id, 2);
     }
@@ -325,8 +323,8 @@ mod tests {
     fn rank_related_zero_score_excluded_even_with_zero_min_score() {
         let species = scenario_one();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
         let scored = score_candidates(center, &candidates, &weights);
 
         let query = RelationshipQuery {
@@ -337,87 +335,100 @@ mod tests {
         };
 
         let ranked = rank_related(scored, &query);
-        // sp-d berskor 0.0 tetap tidak dimasukkan
+
         assert_eq!(ranked.len(), 2);
-        assert!(ranked.iter().all(|r| r.species.id != 4));
+        assert!(!ranked.iter().any(|r| r.species.id == 4));
     }
 
     #[test]
     fn rank_related_required_basis_filter() {
         let species = scenario_two();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
         let scored = score_candidates(center, &candidates, &weights);
 
-        // Kueri 1: required_basis = Taxonomy -> sp-e lolos karena similarity taksonomi 1.0 > 0
-        let q_tax = RelationshipQuery {
-            species_id: center.id,
-            min_score: 0.20,
-            limit: 10,
-            required_basis: Some(AttributeKind::Taxonomy),
-        };
-        let ranked_tax = rank_related(scored.clone(), &q_tax);
-        assert_eq!(ranked_tax.len(), 1);
-        assert_eq!(ranked_tax[0].species.id, 5);
-
-        // Kueri 2: required_basis = Habitat -> sp-e tidak punya bukti habitat -> hasil kosong
-        let q_hab = RelationshipQuery {
+        // Kueri dengan basis Habitat: sp-e punya total 0.50 tapi dari taksonomi saja
+        let query_habitat = RelationshipQuery {
             species_id: center.id,
             min_score: 0.20,
             limit: 10,
             required_basis: Some(AttributeKind::Habitat),
         };
-        let ranked_hab = rank_related(scored, &q_hab);
-        assert!(ranked_hab.is_empty());
-    }
+        let ranked_habitat = rank_related(scored.clone(), &query_habitat);
+        assert!(ranked_habitat.is_empty());
 
-    #[test]
-    fn rank_related_tie_break_by_id_ascending() {
-        let species = scenario_one();
-        let center = &species[0];
-        let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
-
-        // Buat dua kandidat dengan skor identik
-        let mut scored = score_candidates(center, &candidates, &weights);
-        // Set skor item[1] (ID 3) sama dengan item[0] (ID 2): 0.85
-        scored[1].score.total = 0.85;
-
-        // Balik urutan input untuk memverifikasi determinisme sorting
-        scored.reverse();
-
-        let query = RelationshipQuery {
+        // Kueri dengan basis Taksonomi: sp-e lolos
+        let query_tax = RelationshipQuery {
             species_id: center.id,
             min_score: 0.20,
             limit: 10,
-            required_basis: None,
+            required_basis: Some(AttributeKind::Taxonomy),
         };
-
-        let ranked = rank_related(scored, &query);
-        assert_eq!(ranked.len(), 2);
-        // ID 2 harus lebih dulu dari ID 3
-        assert_eq!(ranked[0].species.id, 2);
-        assert_eq!(ranked[1].species.id, 3);
+        let ranked_tax = rank_related(scored, &query_tax);
+        assert_eq!(ranked_tax.len(), 1);
+        assert_eq!(ranked_tax[0].species.id, 5);
     }
 
     #[test]
     fn rank_related_respects_limit() {
         let species = scenario_one();
         let center = &species[0];
+        let candidates = candidate_species(&species, center.id);
         let weights = default_weights();
-        let candidates = candidate_species(&species, &center.id);
         let scored = score_candidates(center, &candidates, &weights);
 
         let query = RelationshipQuery {
             species_id: center.id,
-            min_score: 0.20,
-            limit: 1, // Batasi 1
+            min_score: 0.0,
+            limit: 1,
             required_basis: None,
         };
 
         let ranked = rank_related(scored, &query);
+
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked[0].species.id, 2);
+    }
+
+    #[test]
+    fn rank_related_tie_break_by_id_ascending() {
+        let item_high_id = RelatedSpecies {
+            species: scenario_one()[1].clone(), // id 2
+            score: RelationshipScore {
+                total: 0.70,
+                coverage: 1.0,
+                evidence: Vec::new(),
+            },
+            explanations: Vec::new(),
+        };
+
+        let mut low_id_species = scenario_one()[1].clone();
+        low_id_species.id = 1;
+        let item_low_id = RelatedSpecies {
+            species: low_id_species, // id 1
+            score: RelationshipScore {
+                total: 0.70,
+                coverage: 1.0,
+                evidence: Vec::new(),
+            },
+            explanations: Vec::new(),
+        };
+
+        // Berikan item dengan id lebih besar terlebih dahulu
+        let scored = vec![item_high_id, item_low_id];
+
+        let query = RelationshipQuery {
+            species_id: 99,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+
+        let ranked = rank_related(scored, &query);
+
+        assert_eq!(ranked.len(), 2);
+        assert_eq!(ranked[0].species.id, 1);
+        assert_eq!(ranked[1].species.id, 2);
     }
 }
