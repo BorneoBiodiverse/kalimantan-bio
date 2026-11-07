@@ -56,9 +56,7 @@ fn fraction_satisfied(checks: &[Option<bool>]) -> f64 {
     let (satisfied, total) = checks
         .iter()
         .flatten()
-        .fold((0u32, 0u32), |(ok, n), &passed| {
-            (ok + u32::from(passed), n + 1)
-        });
+        .fold((0u32, 0u32), |(ok, n), &passed| (ok + u32::from(passed), n + 1));
 
     if total == 0 {
         0.0
@@ -69,9 +67,7 @@ fn fraction_satisfied(checks: &[Option<bool>]) -> f64 {
 
 /// Case-insensitive comparison of an optional filter value with a species field.
 fn eq_filter(filter: &Option<String>, value: &str) -> Option<bool> {
-    filter
-        .as_ref()
-        .map(|wanted| wanted.eq_ignore_ascii_case(value))
+    filter.as_ref().map(|wanted| wanted.eq_ignore_ascii_case(value))
 }
 
 /// Scores the text relevance of a species against query keywords.
@@ -108,8 +104,10 @@ pub(crate) fn score_text_match(species: &Species, filters: &QueryFilters) -> f64
 /// Scores the taxonomic relevance of a species.
 ///
 /// Evaluates matching precision across taxonomic levels: the score is the
-/// fraction of specified taxonomic constraints (`kingdom_id`, `class_id`) that
-/// the species satisfies.
+/// fraction of specified taxonomic constraints that the species satisfies.
+/// Both ID constraints (`kingdom_id`, `class_id`) and name constraints
+/// (`kingdom`, `class`, `order`, `family`, `genus`) are considered, because
+/// natural-language queries such as `mamalia` only produce a class *name*.
 ///
 /// # Arguments
 ///
@@ -126,6 +124,11 @@ pub(crate) fn score_taxonomy_match(species: &Species, filters: &QueryFilters) ->
             .kingdom_id
             .map(|id| id == species.taxonomy.kingdom_id),
         filters.class_id.map(|id| id == species.taxonomy.class_id),
+        eq_filter(&filters.kingdom, &species.taxonomy.kingdom),
+        eq_filter(&filters.class, &species.taxonomy.class),
+        eq_filter(&filters.order, &species.taxonomy.order),
+        eq_filter(&filters.family, &species.taxonomy.family),
+        eq_filter(&filters.genus, &species.taxonomy.genus),
     ])
 }
 
@@ -170,24 +173,29 @@ pub(crate) fn score_conservation_match(species: &Species, filters: &QueryFilters
 /// # Returns
 ///
 /// A composite relevance score between 0.0 and 1.0. Returns 0.0 when the query
-/// has no scorable criteria at all.
+/// has no criteria at all, and 1.0 when the query only uses criteria that
+/// filtering already guarantees (`species_type`, `is_verified`), since those
+/// survivors are equally relevant at that point.
 pub(crate) fn score_species(
     species: &Species,
     filters: &QueryFilters,
     weights: &ScoringWeights,
 ) -> f64 {
     let has_text = !filters.free_text.is_empty();
-    let has_taxonomy = filters.kingdom_id.is_some() || filters.class_id.is_some();
+    let has_taxonomy = filters.kingdom_id.is_some()
+        || filters.class_id.is_some()
+        || filters.kingdom.is_some()
+        || filters.class.is_some()
+        || filters.order.is_some()
+        || filters.family.is_some()
+        || filters.genus.is_some();
     let has_conservation =
         filters.iucn.is_some() || filters.cites.is_some() || filters.p106.is_some();
+    let has_filter_only_criteria = filters.species_type.is_some() || filters.is_verified.is_some();
 
     // (is the component active?, its score, its weight)
     let components = [
-        (
-            has_text,
-            score_text_match(species, filters),
-            weights.text_weight,
-        ),
+        (has_text, score_text_match(species, filters), weights.text_weight),
         (
             has_taxonomy,
             score_taxonomy_match(species, filters),
@@ -205,6 +213,13 @@ pub(crate) fn score_species(
         .filter(|(is_active, _, _)| *is_active)
         .map(|&(_, score, weight)| (score, weight))
         .collect();
+
+    if active.is_empty() {
+        // Nothing scoring can measure. A query that only used filter-guaranteed
+        // criteria (species_type, is_verified) yields equally relevant matches;
+        // a query with no criteria at all carries no relevance signal.
+        return if has_filter_only_criteria { 1.0 } else { 0.0 };
+    }
 
     let weight_sum: f64 = active.iter().map(|&(_, weight)| weight).sum();
     if weight_sum <= 0.0 {
@@ -273,10 +288,7 @@ mod tests {
 
     #[test]
     fn text_whole_word_in_name_scores_highest() {
-        assert_eq!(
-            score_text_match(&orangutan(), &with_text(&["orangutan"])),
-            1.0
-        );
+        assert_eq!(score_text_match(&orangutan(), &with_text(&["orangutan"])), 1.0);
     }
 
     #[test]
@@ -298,31 +310,16 @@ mod tests {
     #[test]
     fn text_is_case_insensitive_and_zero_without_keywords() {
         assert_eq!(score_text_match(&orangutan(), &with_text(&["PONGO"])), 1.0);
-        assert_eq!(
-            score_text_match(&orangutan(), &QueryFilters::default()),
-            0.0
-        );
+        assert_eq!(score_text_match(&orangutan(), &QueryFilters::default()), 0.0);
         assert_eq!(score_text_match(&orangutan(), &with_text(&["xyz123"])), 0.0);
     }
 
     #[test]
     fn taxonomy_is_fraction_of_satisfied_constraints() {
         let sp = orangutan(); // kingdom 1, class 3
-        let both = QueryFilters {
-            kingdom_id: Some(1),
-            class_id: Some(3),
-            ..Default::default()
-        };
-        let half = QueryFilters {
-            kingdom_id: Some(1),
-            class_id: Some(99),
-            ..Default::default()
-        };
-        let none = QueryFilters {
-            kingdom_id: Some(2),
-            class_id: Some(99),
-            ..Default::default()
-        };
+        let both = QueryFilters { kingdom_id: Some(1), class_id: Some(3), ..Default::default() };
+        let half = QueryFilters { kingdom_id: Some(1), class_id: Some(99), ..Default::default() };
+        let none = QueryFilters { kingdom_id: Some(2), class_id: Some(99), ..Default::default() };
         assert_eq!(score_taxonomy_match(&sp, &both), 1.0);
         assert_eq!(score_taxonomy_match(&sp, &half), 0.5);
         assert_eq!(score_taxonomy_match(&sp, &none), 0.0);
@@ -352,13 +349,94 @@ mod tests {
     // `todo!()` stub in `kalimantanbio-shared`. Remove `#[ignore]` once it is implemented.
 
     #[test]
+    fn taxonomy_name_constraints_are_scored() {
+        let sp = orangutan(); // Animalia / Mammalia / Primates / Hominidae / Pongo
+        let by_class = QueryFilters {
+            class: Some("Mammalia".into()),
+            ..Default::default()
+        };
+        let by_class_lower = QueryFilters {
+            class: Some("mammalia".into()),
+            ..Default::default()
+        };
+        let wrong_class = QueryFilters {
+            class: Some("Aves".into()),
+            ..Default::default()
+        };
+        let full_chain = QueryFilters {
+            kingdom: Some("Animalia".into()),
+            class: Some("Mammalia".into()),
+            order: Some("Primates".into()),
+            family: Some("Hominidae".into()),
+            genus: Some("Pongo".into()),
+            ..Default::default()
+        };
+        let half_chain = QueryFilters {
+            kingdom: Some("Animalia".into()),
+            genus: Some("Panthera".into()),
+            ..Default::default()
+        };
+
+        assert_eq!(score_taxonomy_match(&sp, &by_class), 1.0);
+        assert_eq!(score_taxonomy_match(&sp, &by_class_lower), 1.0);
+        assert_eq!(score_taxonomy_match(&sp, &wrong_class), 0.0);
+        assert_eq!(score_taxonomy_match(&sp, &full_chain), 1.0);
+        assert_eq!(score_taxonomy_match(&sp, &half_chain), 0.5);
+    }
+
+    #[test]
+    fn taxonomy_only_query_scores_one_instead_of_zero() {
+        let sp = orangutan();
+        let filters = QueryFilters {
+            class: Some("Mammalia".into()),
+            ..Default::default()
+        };
+        let score = score_species(&sp, &filters, &ScoringWeights::default());
+        assert!((score - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn filter_only_query_scores_one_and_empty_query_stays_zero() {
+        let sp = orangutan();
+        let by_type = QueryFilters {
+            species_type: Some("Endemic".into()),
+            ..Default::default()
+        };
+        let by_verification = QueryFilters {
+            is_verified: Some(true),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            score_species(&sp, &by_type, &ScoringWeights::default()),
+            1.0
+        );
+        assert_eq!(
+            score_species(&sp, &by_verification, &ScoringWeights::default()),
+            1.0
+        );
+        assert_eq!(
+            score_species(&sp, &QueryFilters::default(), &ScoringWeights::default()),
+            0.0
+        );
+    }
+
+    #[test]
+    fn text_and_taxonomy_name_are_combined_with_renormalized_weights() {
+        // text = 1.0 (word in name), taxonomy name = 1.0 -> weighted 1.0.
+        let filters = QueryFilters {
+            free_text: vec!["orangutan".into()],
+            class: Some("Mammalia".into()),
+            ..Default::default()
+        };
+        let score = score_species(&orangutan(), &filters, &ScoringWeights::default());
+        assert!((score - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn species_perfect_match_scores_one_even_with_few_criteria() {
         // Only text is used -> weights are re-normalized, so a perfect match is 1.0, not 0.5.
-        let score = score_species(
-            &orangutan(),
-            &with_text(&["orangutan"]),
-            &ScoringWeights::default(),
-        );
+        let score = score_species(&orangutan(), &with_text(&["orangutan"]), &ScoringWeights::default());
         assert!((score - 1.0).abs() < 1e-12);
     }
 
@@ -378,14 +456,7 @@ mod tests {
 
     #[test]
     fn species_empty_query_scores_zero_and_stays_in_range() {
-        assert_eq!(
-            score_species(
-                &orangutan(),
-                &QueryFilters::default(),
-                &ScoringWeights::default()
-            ),
-            0.0
-        );
+        assert_eq!(score_species(&orangutan(), &QueryFilters::default(), &ScoringWeights::default()), 0.0);
         let full = QueryFilters {
             free_text: vec!["pongo".into()],
             kingdom_id: Some(1),

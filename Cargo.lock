@@ -1279,6 +1279,7 @@ name = "species-search"
 version = "0.1.0"
 dependencies = [
  "kalimantanbio-shared",
+ "serde",
  "serde_json",
  "tokio",
 ]

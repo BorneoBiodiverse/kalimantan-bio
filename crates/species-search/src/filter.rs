@@ -30,7 +30,8 @@ pub(crate) fn matches_free_text(species: &Species, filters: &QueryFilters) -> bo
 
 /// Checks whether a species matches taxonomic classification filters.
 ///
-/// Evaluates kingdom ID and class ID constraints when specified.
+/// Evaluates every specified level: kingdom / class IDs and the
+/// kingdom, class, order, family, and genus names.
 pub(crate) fn matches_taxonomy(species: &Species, filters: &QueryFilters) -> bool {
     filters
         .kingdom_id
@@ -38,6 +39,26 @@ pub(crate) fn matches_taxonomy(species: &Species, filters: &QueryFilters) -> boo
         && filters
             .class_id
             .map_or(true, |id| species.taxonomy.class_id == id)
+        && filters
+            .kingdom
+            .as_ref()
+            .map_or(true, |k| eq_ci(&species.taxonomy.kingdom, k))
+        && filters
+            .class
+            .as_ref()
+            .map_or(true, |c| eq_ci(&species.taxonomy.class, c))
+        && filters
+            .order
+            .as_ref()
+            .map_or(true, |o| eq_ci(&species.taxonomy.order, o))
+        && filters
+            .family
+            .as_ref()
+            .map_or(true, |f| eq_ci(&species.taxonomy.family, f))
+        && filters
+            .genus
+            .as_ref()
+            .map_or(true, |g| eq_ci(&species.taxonomy.genus, g))
 }
 
 /// Checks whether a species matches conservation status criteria.
@@ -45,18 +66,9 @@ pub(crate) fn matches_taxonomy(species: &Species, filters: &QueryFilters) -> boo
 /// Evaluates IUCN Red List category, CITES appendix, and P.106 national
 /// protection status.
 pub(crate) fn matches_conservation(species: &Species, filters: &QueryFilters) -> bool {
-    filters
-        .iucn
-        .as_ref()
-        .map_or(true, |v| eq_ci(&species.iucn, v))
-        && filters
-            .cites
-            .as_ref()
-            .map_or(true, |v| eq_ci(&species.cites, v))
-        && filters
-            .p106
-            .as_ref()
-            .map_or(true, |v| eq_ci(&species.p106, v))
+    filters.iucn.as_ref().map_or(true, |v| eq_ci(&species.iucn, v))
+        && filters.cites.as_ref().map_or(true, |v| eq_ci(&species.cites, v))
+        && filters.p106.as_ref().map_or(true, |v| eq_ci(&species.p106, v))
 }
 
 /// Checks whether a species matches origin/type requirements (e.g. "Endemic").
@@ -69,7 +81,8 @@ pub(crate) fn matches_species_type(species: &Species, filters: &QueryFilters) ->
 
 /// Filters a slice of species records, retaining only those matching all query criteria.
 ///
-/// Applies all individual predicates sequentially via functional iterator composition.
+/// Applies all individual predicates sequentially via functional iterator composition,
+/// including the verification flag (`is_verified`) when the query sets it.
 pub(crate) fn filter_species<'a>(
     species_list: &'a [Species],
     filters: &QueryFilters,

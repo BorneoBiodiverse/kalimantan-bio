@@ -177,6 +177,20 @@ fn filter_fragments(filters: &QueryFilters) -> Vec<String> {
         fragments.push(format!("verified:{verified}"));
     }
 
+    // Taxonomy name filters are supported by the Stage 1 parser, so they must
+    // survive as context instead of being dropped.
+    for (field, value) in [
+        ("kingdom", filters.kingdom.as_deref()),
+        ("class", filters.class.as_deref()),
+        ("order", filters.order.as_deref()),
+        ("family", filters.family.as_deref()),
+        ("genus", filters.genus.as_deref()),
+    ] {
+        if let Some(value) = value {
+            fragments.push(format!("{field}:{}", query_token(value)));
+        }
+    }
+
     fragments
 }
 
@@ -192,6 +206,11 @@ fn filter_value(filters: &QueryFilters, field: &str) -> Option<String> {
         "type" => filters.species_type.as_deref().map(normalize_value),
         "kingdom_id" => filters.kingdom_id.map(|id| id.to_string()),
         "class_id" => filters.class_id.map(|id| id.to_string()),
+        "kingdom" => filters.kingdom.as_deref().map(normalize_value),
+        "class" => filters.class.as_deref().map(normalize_value),
+        "order" => filters.order.as_deref().map(normalize_value),
+        "family" => filters.family.as_deref().map(normalize_value),
+        "genus" => filters.genus.as_deref().map(normalize_value),
         "is_verified" => filters.is_verified.map(|flag| flag.to_string()),
         _ => None,
     }
@@ -199,16 +218,15 @@ fn filter_value(filters: &QueryFilters, field: &str) -> Option<String> {
 
 /// Converts a dominant attribute label into a query fragment the parser accepts.
 ///
-/// `iucn`, `cites`, `p106` and `type` labels are already written as parser
-/// tokens. `genus` becomes a free-text keyword because genus names appear in
-/// scientific names. `family` is intentionally not convertible: the parser only
-/// supports numeric `kingdom_id`/`class_id` filters, so a family suggestion
-/// could never match a species and would mislead the user.
+/// `iucn`, `cites`, `p106`, `type`, `family` and `order` labels are already
+/// written as parser tokens, because Stage 1 understands those prefixes.
+/// `genus` becomes a free-text keyword because genus names appear in scientific
+/// names, so a bare keyword search finds them.
 fn attribute_fragment(label: &str) -> Option<String> {
     let (field, value) = label.split_once(':')?;
 
     match field {
-        "iucn" | "cites" | "p106" | "type" => Some(label.to_string()),
+        "iucn" | "cites" | "p106" | "type" | "family" | "order" => Some(label.to_string()),
         "genus" => Some(value.replace('-', " ")),
         _ => None,
     }
@@ -325,8 +343,11 @@ fn structured_token(token: &str) -> Option<(&'static str, String)> {
         "cites" => "cites",
         "p106" | "protection" => "p106",
         "type" | "species_type" | "origin" => "type",
-        "kingdom_id" | "kingdom" => "kingdom_id",
-        "class_id" | "class" => "class_id",
+        "kingdom_id" | "kingdom" | "kerajaan" => "kingdom_id",
+        "class_id" | "class" | "kelas" => "class_id",
+        "order" | "ordo" => "order",
+        "family" | "famili" => "family",
+        "genus" => "genus",
         "verified" | "is_verified" => "is_verified",
         _ => return None,
     };
@@ -617,11 +638,41 @@ mod tests {
     }
 
     #[test]
-    fn candidates_skip_attributes_the_parser_cannot_express() {
+    fn candidates_emit_attributes_the_parser_can_express() {
         let candidates =
             generate_candidate_queries(&QueryFilters::default(), &["family:hominidae".to_string()]);
 
-        assert!(candidates.is_empty());
+        assert_eq!(candidates, vec!["family:hominidae".to_string()]);
+    }
+
+    #[test]
+    fn context_keeps_taxonomy_name_filters() {
+        let filters = QueryFilters {
+            class: Some("Mammalia".into()),
+            ..Default::default()
+        };
+
+        let candidates = generate_candidate_queries(&filters, &["iucn:cr".to_string()]);
+
+        assert_eq!(
+            candidates,
+            vec![
+                "class:mammalia iucn:cr".to_string(),
+                "iucn:cr".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn candidates_skip_family_the_query_already_constrains() {
+        let filters = QueryFilters {
+            family: Some("Hominidae".into()),
+            ..Default::default()
+        };
+
+        assert!(
+            generate_candidate_queries(&filters, &["family:hominidae".to_string()]).is_empty()
+        );
     }
 
     #[test]
