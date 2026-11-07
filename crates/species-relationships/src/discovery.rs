@@ -107,6 +107,24 @@ fn find_prefix_value<'a>(values: &'a [String], prefix: &str) -> Option<&'a str> 
         .map(|v| &v[prefix.len()..])
 }
 
+/// Menghitung tingkat afinitas taksonomi ("genus", "family", "order", atau None).
+pub(crate) fn compute_taxonomic_affinity(evidence: &[AttributeEvidence]) -> Option<String> {
+    let tax_ev = evidence
+        .iter()
+        .find(|ev| ev.attribute == AttributeKind::Taxonomy)?;
+    
+    let sim = tax_ev.similarity?;
+    if sim >= 1.0 - FLOAT_TOLERANCE {
+        Some("genus".to_string())
+    } else if sim >= 0.6 - FLOAT_TOLERANCE {
+        Some("family".to_string())
+    } else if sim >= 0.3 - FLOAT_TOLERANCE {
+        Some("order".to_string())
+    } else {
+        None
+    }
+}
+
 /// Mengomposisikan ekstraksi bukti, perhitungan skor, dan pembentukan penjelasan
 /// untuk setiap kandidat spesies terhadap spesies pusat.
 pub(crate) fn score_candidates(
@@ -116,15 +134,28 @@ pub(crate) fn score_candidates(
 ) -> Vec<RelatedSpecies> {
     candidates
         .iter()
+        .filter(|candidate| {
+            // Kingdom isolation: center and candidate must share the same kingdom
+            // (e.g. Animalia vs Plantae can never be related species)
+            let center_k = center.taxonomy.kingdom.trim();
+            let cand_k = candidate.taxonomy.kingdom.trim();
+            if !center_k.is_empty() && !cand_k.is_empty() {
+                center_k.eq_ignore_ascii_case(cand_k)
+            } else {
+                true
+            }
+        })
         .map(|candidate| {
             let evidence = collect_evidence(center, candidate);
             let score = score_evidence(&evidence, weights);
             let explanations = explain_relationship(&score, weights);
+            let taxonomic_affinity = compute_taxonomic_affinity(&evidence);
 
             RelatedSpecies {
                 species: (*candidate).clone(),
                 score,
                 explanations,
+                taxonomic_affinity,
             }
         })
         .collect()
@@ -132,10 +163,11 @@ pub(crate) fn score_candidates(
 
 /// Menyaring, mengurutkan, dan membatasi rekomendasi spesies terkait sesuai kueri.
 ///
-/// Urutan aturan per spesifikasi §6:
+/// Urutan aturan:
 /// 1. Simpan kandidat dengan `total > 0.0` dan `total >= min_score`.
 /// 2. Jika `required_basis` terisi, simpan hanya kandidat dengan similarity `Some(value)` dan `value > 0.0` pada dimensi tersebut.
-/// 3. Urutkan berdasarkan skor total menurun, lalu ID spesies secara numerik menaik untuk skor yang sama.
+///    Jika `required_basis` tidak ditentukan (kueri umum), simpan hanya kandidat yang memiliki afinitas taksonomi (genus/family/order).
+/// 3. Urutkan berdasarkan tier taksonomi terlebih dahulu (Genus -> Famili -> Ordo), kemudian skor total menurun, lalu ID spesies secara numerik menaik.
 /// 4. Ambil maksimal `limit` kandidat setelah seluruh filter diterapkan.
 pub(crate) fn rank_related(
     mut items: Vec<RelatedSpecies>,
@@ -147,7 +179,9 @@ pub(crate) fn rank_related(
             && item.score.total >= (query.min_score - FLOAT_TOLERANCE)
     });
 
-    // Aturan 2: Filter dimensi basis wajib (jika ditentukan)
+    // Aturan 2: Filter dimensi basis wajib (jika ditentukan),
+    // atau untuk kueri umum tanpa basis spesifik: wajib memiliki afinitas taksonomi
+    // jika item memiliki evidence taksonomi
     if let Some(required) = query.required_basis {
         items.retain(|item| {
             item.score
@@ -157,10 +191,39 @@ pub(crate) fn rank_related(
                 .and_then(|ev| ev.similarity)
                 .is_some_and(|sim| sim > FLOAT_TOLERANCE)
         });
+    } else {
+        // Untuk kueri umum hubungan spesies: kandidat dengan evidence taksonomi harus memiliki kesamaan (minimal ordo)
+        items.retain(|item| {
+            if let Some(tax_ev) = item
+                .score
+                .evidence
+                .iter()
+                .find(|ev| ev.attribute == AttributeKind::Taxonomy)
+            {
+                tax_ev.similarity.is_some_and(|sim| sim > FLOAT_TOLERANCE)
+            } else {
+                true
+            }
+        });
     }
 
-    // Aturan 3: Urutkan skor menurun; tie-break dengan ID spesies menaik
+    // Aturan 3: Urutkan berdasarkan tier taksonomi terlebih dahulu (Genus -> Famili -> Ordo),
+    // kemudian skor total menurun, dan tie-break ID spesies menaik
     items.sort_by(|a, b| {
+        let tier = |item: &RelatedSpecies| -> u8 {
+            match item.taxonomic_affinity.as_deref() {
+                Some("genus") => 1,
+                Some("family") => 2,
+                Some("order") => 3,
+                _ => 4,
+            }
+        };
+
+        let tier_cmp = tier(a).cmp(&tier(b));
+        if tier_cmp != std::cmp::Ordering::Equal {
+            return tier_cmp;
+        }
+
         if (b.score.total - a.score.total).abs() < FLOAT_TOLERANCE {
             a.species.id.cmp(&b.species.id)
         } else {
@@ -401,6 +464,7 @@ mod tests {
                 evidence: Vec::new(),
             },
             explanations: Vec::new(),
+            taxonomic_affinity: Some("genus".to_string()),
         };
 
         let mut low_id_species = scenario_one()[1].clone();
@@ -413,6 +477,7 @@ mod tests {
                 evidence: Vec::new(),
             },
             explanations: Vec::new(),
+            taxonomic_affinity: Some("genus".to_string()),
         };
 
         // Berikan item dengan id lebih besar terlebih dahulu
@@ -430,5 +495,81 @@ mod tests {
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked[0].species.id, 1);
         assert_eq!(ranked[1].species.id, 2);
+    }
+
+    #[test]
+    fn score_candidates_isolates_different_kingdoms() {
+        let center = crate::test_fixtures::species(
+            1,
+            "Pongo pygmaeus",
+            "Primates",
+            "Hominidae",
+            "Pongo",
+            &["rainforest", "lowland"],
+            &["arboreal", "frugivore"],
+        );
+        let mut plant = crate::test_fixtures::species(
+            2,
+            "Durio zibethinus",
+            "Malvales",
+            "Malvaceae",
+            "Durio",
+            &["rainforest", "lowland"],
+            &["tree", "autotroph"],
+        );
+
+        plant.taxonomy.kingdom = "Plantae".to_string();
+
+        let candidates = vec![&plant];
+        let weights = default_weights();
+        let scored = score_candidates(&center, &candidates, &weights);
+
+        // Animal cannot relate to Plant despite identical habitats
+        assert!(scored.is_empty(), "Plant must be excluded from Animal candidates");
+    }
+
+    #[test]
+    fn rank_related_prioritizes_genus_first() {
+        let mut genus_peer = scenario_one()[1].clone();
+        
+        genus_peer.id = 10;
+        let genus_item = RelatedSpecies {
+            species: genus_peer,
+            score: RelationshipScore {
+                total: 0.50, // lower score
+                coverage: 0.50,
+                evidence: Vec::new(),
+            },
+            explanations: Vec::new(),
+            taxonomic_affinity: Some("genus".to_string()),
+        };
+
+        let mut family_peer = scenario_one()[2].clone();
+        family_peer.id = 20;
+        
+        let family_item = RelatedSpecies {
+            species: family_peer,
+            score: RelationshipScore {
+                total: 0.85, // higher score due to habitat/char
+                coverage: 1.0,
+                evidence: Vec::new(),
+            },
+            explanations: Vec::new(),
+            taxonomic_affinity: Some("family".to_string()),
+        };
+
+        // Family item has higher total score (0.85 vs 0.50), but Genus item must be ranked first
+        let scored = vec![family_item, genus_item];
+        let query = RelationshipQuery {
+            species_id: 1,
+            min_score: 0.0,
+            limit: 10,
+            required_basis: None,
+        };
+
+        let ranked = rank_related(scored, &query);
+        assert_eq!(ranked.len(), 2);
+        assert_eq!(ranked[0].species.id, 10, "Genus match must rank #1");
+        assert_eq!(ranked[1].species.id, 20, "Family match must rank #2");
     }
 }

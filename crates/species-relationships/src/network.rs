@@ -33,6 +33,7 @@ pub(crate) fn make_edge(center_id: SpeciesId, related: &RelatedSpecies) -> Netwo
         target: related.species.id,
         score: related.score.clone(),
         explanations: related.explanations.clone(),
+        taxonomic_affinity: related.taxonomic_affinity.clone(),
     }
 }
 
@@ -117,6 +118,7 @@ mod tests {
                 }],
             },
             explanations: vec!["shared genus".to_string()],
+            taxonomic_affinity: Some("genus".to_string()),
         }
     }
 

@@ -276,4 +276,23 @@ mod tests {
             .iter()
             .any(|node| node["id"] == 3 && node["is_center"] == true));
     }
+
+    #[tokio::test]
+    async fn kingdom_gate_excludes_plants_from_primate_relationships() {
+        let (status, body) = get(
+            build_router(fixture_state()),
+            "/api/v1/species/1/relationships?min_score=0.0&limit=10",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    
+        let related = body["data"]["related"].as_array().expect("related must be a list");
+    
+        // Species 5 is Rafflesia (Plantae); must never relate to Primate 1
+        assert!(!related.iter().any(|item| item["species"]["id"] == 5));
+    
+        // Species 3 is Pongo abelii (same genus); must be present with taxonomic_affinity "genus"
+        assert!(related.iter().any(|item| item["species"]["id"] == 3 && item["taxonomic_affinity"] == "genus"));
+    }
 }

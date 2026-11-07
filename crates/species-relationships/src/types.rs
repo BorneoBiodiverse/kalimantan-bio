@@ -90,10 +90,16 @@ pub struct RelationshipScore {
 pub struct RelatedSpecies {
     /// The related species.
     pub species: Species,
+    
     /// Relationship score.
     pub score: RelationshipScore,
+    
     /// Human-readable explanations.
     pub explanations: Vec<String>,
+    
+    /// Taxonomic affinity level relative to center: "genus", "family", "order", or None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taxonomic_affinity: Option<String>,
 }
 
 /// Network node.
@@ -101,8 +107,10 @@ pub struct RelatedSpecies {
 pub struct NetworkNode {
     /// Species identifier.
     pub id: SpeciesId,
+    
     /// Display label.
     pub label: String,
+    
     /// Whether this node is the center species.
     pub is_center: bool,
 }
@@ -112,12 +120,19 @@ pub struct NetworkNode {
 pub struct NetworkEdge {
     /// Source node.
     pub source: SpeciesId,
+    
     /// Target node.
     pub target: SpeciesId,
+    
     /// Relationship score of the edge.
     pub score: RelationshipScore,
+    
     /// Human-readable explanations.
     pub explanations: Vec<String>,
+    
+    /// Taxonomic affinity level relative to center: "genus", "family", "order", or None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taxonomic_affinity: Option<String>,
 }
 
 /// The species relationship network.
